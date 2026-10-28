@@ -52,10 +52,12 @@ public class HistoryEntry
 
 public class BookRequest
 {
+    public string Id { get; set; } = "";
+    public string Type { get; set; } = "Borrow";   // Borrow or Return
     public Book Book { get; set; }
     public Student Student { get; set; }
     public DateTime Date { get; set; }
-    public string Status { get; set; } = "Pending";   // Pending, Approved, Declined
+    public string Status { get; set; } = "Pending";   // Pending, Approved, Rejected / Declined
     public Loan Loan { get; set; }
 }
 
@@ -76,7 +78,9 @@ public static class AppData
     public static event Action CartChanged;
     public static void RaiseCartChanged() => CartChanged?.Invoke();
 
-    public static int PendingCount => Requests.Count(r => r.Status == "Pending");
+    public static int PendingBorrowCount => Requests.Count(r => r.Type == "Borrow" && r.Status == "Pending");
+    public static int PendingReturnCount => Requests.Count(r => r.Type == "Return" && r.Status == "Pending");
+    public static int PendingCount => PendingBorrowCount;
 
     public static string Initials(string name)
     {
@@ -95,21 +99,49 @@ public static class AppData
 
     public static bool Approve(BookRequest r)
     {
-        if (!r.Book.Available) return false;
+        if (r.Book != null && !r.Book.Available && r.Type == "Borrow") return false;
         r.Status = "Approved";
-        r.Loan ??= new Loan { Book = r.Book, StudentId = r.Student.Id };
-        r.Loan.Status = "RETURN";
-        r.Loan.Borrowed = DateTime.Today;
-        r.Loan.Due = DateTime.Today.AddDays(7);
-        if (!Loans.Contains(r.Loan)) Loans.Add(r.Loan);
-        r.Book.Out++;
+        if (r.Type == "Borrow" && r.Book != null)
+        {
+            r.Loan ??= new Loan { Book = r.Book, StudentId = r.Student?.Id ?? "" };
+            r.Loan.Status = "RETURN";
+            r.Loan.Borrowed = DateTime.Today;
+            r.Loan.Due = DateTime.Today.AddDays(7);
+            if (!Loans.Contains(r.Loan)) Loans.Add(r.Loan);
+            r.Book.Out++;
+        }
+        else if (r.Type == "Return" && r.Book != null)
+        {
+            var loan = r.Loan ?? Loans.FirstOrDefault(l => l.Book == r.Book && l.StudentId == r.Student?.Id);
+            if (loan != null) Return(loan);
+        }
+        SaveRequestsToDb();
         return true;
     }
 
     public static void Decline(BookRequest r)
     {
-        r.Status = "Declined";
-        if (r.Loan != null) Loans.Remove(r.Loan);
+        r.Status = "Rejected";
+        if (r.Loan != null && r.Type == "Borrow") Loans.Remove(r.Loan);
+        SaveRequestsToDb();
+    }
+
+    public static void SaveRequestsToDb()
+    {
+        var records = Requests.Select(r => new RequestDbRecord
+        {
+            Id = r.Id,
+            Type = r.Type,
+            StudentId = r.Student?.Id ?? "",
+            StudentName = r.Student?.Name ?? "",
+            BookTitle = r.Book?.Title ?? "",
+            BookAuthor = r.Book?.Author ?? "",
+            BookIsbn = r.Book?.Isbn ?? "",
+            BookCoverPath = r.Book?.CoverPath ?? "",
+            Date = r.Date,
+            Status = r.Status
+        }).ToList();
+        Database.SaveRequests(records);
     }
 
     public static void Return(Loan l)
@@ -126,13 +158,24 @@ public static class AppData
 
     public static void SubmitCart(IEnumerable<Book> books)
     {
+        int nextNum = Requests.Count + 1;
         foreach (var b in books.ToList())
         {
             var loan = new Loan { Book = b, StudentId = Me.Id, Status = "PENDING", Borrowed = DateTime.Today, Due = DateTime.Today.AddDays(7) };
             Loans.Add(loan);
-            Requests.Add(new BookRequest { Book = b, Student = Me, Date = DateTime.Today, Status = "Pending", Loan = loan });
+            Requests.Add(new BookRequest
+            {
+                Id = $"BR-{DateTime.Today.Year}-{nextNum++:D4}",
+                Type = "Borrow",
+                Book = b,
+                Student = Me,
+                Date = DateTime.Now,
+                Status = "Pending",
+                Loan = loan
+            });
             Cart.Remove(b);
         }
+        SaveRequestsToDb();
         RaiseCartChanged();
     }
 
@@ -141,6 +184,60 @@ public static class AppData
         // Load students from database
         var dbStudents = Database.LoadStudents();
         Students.AddRange(dbStudents);
+
+        // Load requests from database
+        var dbRequests = Database.LoadRequests();
+        foreach (var rec in dbRequests)
+        {
+            var st = Students.FirstOrDefault(s => s.Id == rec.StudentId);
+            if (st == null)
+            {
+                st = new Student
+                {
+                    Id = rec.StudentId,
+                    Name = rec.StudentName,
+                    Email = $"{rec.StudentId.ToLowerInvariant().Replace("-", "")}@library.edu",
+                    Year = "2nd Year",
+                    Course = "BS Computer Science"
+                };
+                Students.Add(st);
+            }
+
+            var bk = Books.FirstOrDefault(b => b.Title.Equals(rec.BookTitle, StringComparison.OrdinalIgnoreCase) ||
+                                               (!string.IsNullOrEmpty(rec.BookIsbn) && b.Isbn == rec.BookIsbn));
+            if (bk == null)
+            {
+                bk = new Book
+                {
+                    Title = rec.BookTitle,
+                    Author = rec.BookAuthor,
+                    Isbn = rec.BookIsbn,
+                    CoverPath = rec.BookCoverPath,
+                    CoverColor = Color.FromArgb(0x8A, 0x6E, 0x50),
+                    Qty = 8,
+                    Out = 2
+                };
+                Books.Add(bk);
+            }
+
+            var req = new BookRequest
+            {
+                Id = rec.Id,
+                Type = string.IsNullOrEmpty(rec.Type) ? "Borrow" : rec.Type,
+                Student = st,
+                Book = bk,
+                Date = rec.Date,
+                Status = rec.Status
+            };
+            Requests.Add(req);
+        }
+
+        // Re-attach saved book covers (ISBN → file path, persisted in data/covers.json)
+        foreach (var (isbn, path) in Database.LoadCoverMap())
+        {
+            var b = Books.FirstOrDefault(x => x.Isbn == isbn);
+            if (b != null && File.Exists(path)) b.CoverPath = path;
+        }
 
         // If no students exist, create a sample one
         if (Students.Count == 0)

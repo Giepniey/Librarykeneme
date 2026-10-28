@@ -363,8 +363,9 @@ public class AccountPage : PageBase
             Enabled = false
         };
         cmbYear.Items.AddRange(new[] { "1", "2", "3", "4" });
-        if (!string.IsNullOrEmpty(me.Year) && cmbYear.Items.Contains(me.Year))
-            cmbYear.SelectedItem = me.Year;
+        var yrDigit = !string.IsNullOrEmpty(me.Year) && char.IsDigit(me.Year[0]) ? me.Year[0].ToString() : me.Year;
+        if (!string.IsNullOrEmpty(yrDigit) && cmbYear.Items.Contains(yrDigit))
+            cmbYear.SelectedItem = yrDigit;
         else
             cmbYear.SelectedIndex = 0;
         info.Controls.Add(cmbYear);

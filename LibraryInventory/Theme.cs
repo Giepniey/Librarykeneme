@@ -28,7 +28,8 @@ public static class Theme
         Font = F(size, style),
         ForeColor = color ?? Ink,
         AutoSize = true,
-        BackColor = Color.Transparent
+        BackColor = Color.Transparent,
+        UseMnemonic = false
     };
 
     public static Button Btn(string text, Color back, Color fore, int w, int h, float size = 9.5f)

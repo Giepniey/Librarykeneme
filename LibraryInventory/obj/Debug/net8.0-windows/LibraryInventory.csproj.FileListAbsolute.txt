@@ -1,0 +1,15 @@
+C:\Users\lagor\Documents\LibraryInventory\LibraryInventory\bin\Debug\net8.0-windows\LibraryInventory.exe
+C:\Users\lagor\Documents\LibraryInventory\LibraryInventory\bin\Debug\net8.0-windows\LibraryInventory.deps.json
+C:\Users\lagor\Documents\LibraryInventory\LibraryInventory\bin\Debug\net8.0-windows\LibraryInventory.runtimeconfig.json
+C:\Users\lagor\Documents\LibraryInventory\LibraryInventory\bin\Debug\net8.0-windows\LibraryInventory.dll
+C:\Users\lagor\Documents\LibraryInventory\LibraryInventory\bin\Debug\net8.0-windows\LibraryInventory.pdb
+C:\Users\lagor\Documents\LibraryInventory\LibraryInventory\obj\Debug\net8.0-windows\LibraryInventory.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\lagor\Documents\LibraryInventory\LibraryInventory\obj\Debug\net8.0-windows\LibraryInventory.AssemblyInfoInputs.cache
+C:\Users\lagor\Documents\LibraryInventory\LibraryInventory\obj\Debug\net8.0-windows\LibraryInventory.AssemblyInfo.cs
+C:\Users\lagor\Documents\LibraryInventory\LibraryInventory\obj\Debug\net8.0-windows\LibraryInventory.csproj.CoreCompileInputs.cache
+C:\Users\lagor\Documents\LibraryInventory\LibraryInventory\obj\Debug\net8.0-windows\LibraryInventory.dll
+C:\Users\lagor\Documents\LibraryInventory\LibraryInventory\obj\Debug\net8.0-windows\refint\LibraryInventory.dll
+C:\Users\lagor\Documents\LibraryInventory\LibraryInventory\obj\Debug\net8.0-windows\LibraryInventory.pdb
+C:\Users\lagor\Documents\LibraryInventory\LibraryInventory\obj\Debug\net8.0-windows\LibraryInventory.genruntimeconfig.cache
+C:\Users\lagor\Documents\LibraryInventory\LibraryInventory\obj\Debug\net8.0-windows\ref\LibraryInventory.dll
+C:\Users\lagor\Documents\LibraryInventory\LibraryInventory\obj\Debug\net8.0-windows\LibraryInventory.sourcelink.json

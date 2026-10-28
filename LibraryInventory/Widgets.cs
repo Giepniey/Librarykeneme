@@ -9,6 +9,7 @@ public static class CoverFactory
 
     public static Bitmap Make(Book b, int w, int h)
     {
+        if (b == null) return new Bitmap(w, h);
         string key = $"{b.Title}|{b.Isbn}|{b.CoverPath}|{w}x{h}";
         if (cache.TryGetValue(key, out var hit)) return hit;
 
@@ -47,20 +48,28 @@ public static class CoverFactory
 
 /// <summary>Drag & drop book cover picker for the Add/Edit Book dialogs.
 /// Light gray area with a cloud-upload icon, "Drag & drop" text and an underlined browse link.
-/// Accepts PNG/JPG/JPEG only; shows the current cover as a preview that can be replaced.</summary>
+/// Clicking anywhere on the box also opens the file picker. Accepts PNG/JPG/JPEG only.
+/// When a cover exists it shows as a preview with a Delete Cover button; the preview
+/// itself also accepts drops so the cover can be replaced directly.</summary>
 public class CoverDropZone : Panel
 {
     readonly Panel zone;
     readonly Label cloudIcon, dragText;
     readonly LinkLabel browseLink;
+    readonly FlowLayoutPanel browseRow;
     readonly PictureBox preview;
+    readonly Button deleteBtn;
+    readonly int w;
     public Image CoverImage { get; private set; }
     public bool Changed { get; private set; }
+    /// <summary>True when the user chose Delete Cover in the dialog (applied on Save).</summary>
+    public bool Cleared { get; private set; }
 
     static readonly string[] AllowedExtensions = { ".png", ".jpg", ".jpeg" };
 
     public CoverDropZone(int width, int height, string existingPath)
     {
+        w = width;
         Size = new Size(width, height);
         BackColor = Color.Transparent;
 
@@ -68,8 +77,11 @@ public class CoverDropZone : Panel
         {
             Dock = DockStyle.Fill,
             BackColor = Color.FromArgb(0xF5, 0xF5, 0xF5),
-            AllowDrop = true
+            AllowDrop = true,
+            Cursor = Cursors.Hand
         };
+        // Clicking anywhere on the gray box opens the file picker too.
+        zone.Click += (s, e) => Browse();
 
         cloudIcon = new Label
         {
@@ -106,7 +118,7 @@ public class CoverDropZone : Panel
         };
         browseLink.Click += (s, e) => Browse();
 
-        var browseRow = new FlowLayoutPanel
+        browseRow = new FlowLayoutPanel
         {
             AutoSize = true,
             WrapContents = false,
@@ -118,27 +130,84 @@ public class CoverDropZone : Panel
         browseLink.Margin = new Padding(0);
         browseRow.Controls.Add(orText);
         browseRow.Controls.Add(browseLink);
-        browseRow.Location = new Point((width - browseRow.PreferredSize.Width) / 2, 86);
 
         zone.Controls.AddRange(new Control[] { cloudIcon, dragText, browseRow });
         zone.DragEnter += Zone_DragEnter;
         zone.DragDrop += Zone_DragDrop;
+        // Labels sit on top of the zone, so clicks on them don't reach the zone —
+        // route them to the file picker too ("click anywhere on the box").
+        foreach (var c in new Control[] { cloudIcon, dragText, browseRow, orText })
+            c.Click += (s, e) => Browse();
         Controls.Add(zone);
 
-        // Preview overlay (shown instead of the instructions when a cover exists)
+        // Preview thumbnail: shown next to the instructions when a cover exists.
+        // It also accepts drops so the user can drag a new image onto the preview itself.
         preview = new PictureBox
         {
-            Dock = DockStyle.Fill,
             SizeMode = PictureBoxSizeMode.Zoom,
             BackColor = Color.White,
+            AllowDrop = true,
             Visible = false
         };
+        preview.DragEnter += Zone_DragEnter;
+        preview.DragDrop += Zone_DragDrop;
         zone.Controls.Add(preview);
+
+        // Delete Cover button under the preview thumbnail (Edit dialog only shows it
+        // when a cover exists; the confirmation happens on click, deletion on Save).
+        deleteBtn = Theme.Btn("🗑 Delete Cover", Color.FromArgb(0xE0, 0x1B, 0x1B), Color.White, 110, 24, 8);
+        deleteBtn.Visible = false;
+        deleteBtn.Click += (s, e) =>
+        {
+            if (MessageBox.Show("Are you sure you want to delete this book cover?",
+                    "Delete Book Cover", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+            {
+                Cleared = true;
+                CoverImage?.Dispose();
+                CoverImage = null;
+                preview.Image = null;
+                LayoutZone(false);
+            }
+        };
+        Controls.Add(deleteBtn);
+
+        LayoutZone(false);
 
         if (!string.IsNullOrEmpty(existingPath))
         {
             var img = Database.LoadImage(existingPath);
             if (img != null) SetImage(img);
+        }
+    }
+
+    /// <summary>Hides the Delete Cover button (used by the Add Book dialog, which has nothing to delete).</summary>
+    public void HideDeleteButton() { deleteBtn.Visible = false; deleteBtn.Hide(); }
+
+    /// <summary>Positions the preview thumbnail, its Delete button, and the instructions.
+    /// No preview: instructions centered. With preview: thumbnail on the left with the
+    /// Delete button under it, instructions (cloud icon, Drag & drop, browse) centered
+    /// in the remaining space so the existing cover can still be replaced by drop or browse.</summary>
+    void LayoutZone(bool hasPreview)
+    {
+        if (!hasPreview)
+        {
+            preview.Visible = false;
+            deleteBtn.Visible = false;
+            cloudIcon.Location = new Point((w - cloudIcon.PreferredWidth) / 2, 14);
+            dragText.Location = new Point((w - dragText.PreferredWidth) / 2, 62);
+            browseRow.Location = new Point((w - browseRow.PreferredSize.Width) / 2, 86);
+        }
+        else
+        {
+            preview.SetBounds(10, 10, 80, 110);
+            preview.Visible = true;
+            deleteBtn.SetBounds(4, 124, 92, 24);
+            deleteBtn.Visible = true;
+            int left = 104;   // space taken by the thumbnail + delete button column
+            int right = w - left;
+            cloudIcon.Location = new Point(left + (right - cloudIcon.PreferredWidth) / 2, 10);
+            dragText.Location = new Point(left + (right - dragText.PreferredWidth) / 2, 56);
+            browseRow.Location = new Point(left + (right - browseRow.PreferredSize.Width) / 2, 80);
         }
     }
 
@@ -171,7 +240,7 @@ public class CoverDropZone : Panel
         }
         try
         {
-            SetImage(Image.FromFile(path));
+            SetImage(Database.LoadImage(path));
             Changed = true;
         }
         catch
@@ -183,13 +252,11 @@ public class CoverDropZone : Panel
 
     void SetImage(Image img)
     {
+        Cleared = false;
         CoverImage?.Dispose();
         CoverImage = img;
         preview.Image = img;
-        preview.BringToFront();
-        preview.Visible = true;
-        foreach (Control c in new Control[] { cloudIcon, dragText, browseLink.Parent })
-            c.SendToBack();
+        LayoutZone(img != null);
     }
 }
 
@@ -290,7 +357,7 @@ public static class Tables
             };
         if (t == "ACTIVE" || t == "ON TIME" || t == "APPROVED" || t.StartsWith("AVAILABLE"))
             return (Color.FromArgb(0xCD, 0xE8, 0xCB), Theme.Green);
-        if (t == "INACTIVE" || t == "LATE" || t == "DECLINED" || t == "BORROWED" || t == "OVERDUE")
+        if (t == "INACTIVE" || t == "LATE" || t == "DECLINED" || t == "REJECTED" || t == "BORROWED" || t == "OVERDUE")
             return (Color.FromArgb(0xF4, 0xC7, 0xC7), Color.FromArgb(0xA0, 0x20, 0x20));
         return (Color.FromArgb(0xF6, 0xDD, 0xB0), Color.FromArgb(0xB0, 0x6A, 0x10));
     }
@@ -334,16 +401,78 @@ public static class Tables
     }
 }
 
+public static class StudentYearHelper
+{
+    public static string ToStandardDisplay(string y)
+    {
+        if (string.IsNullOrWhiteSpace(y)) return "1st Year";
+        var t = y.Trim();
+        if (t.StartsWith("1") || t.Equals("First Year", StringComparison.OrdinalIgnoreCase)) return "1st Year";
+        if (t.StartsWith("2") || t.Equals("Second Year", StringComparison.OrdinalIgnoreCase)) return "2nd Year";
+        if (t.StartsWith("3") || t.Equals("Third Year", StringComparison.OrdinalIgnoreCase)) return "3rd Year";
+        if (t.StartsWith("4") || t.Equals("Fourth Year", StringComparison.OrdinalIgnoreCase)) return "4th Year";
+        return t;
+    }
+
+    public static bool Matches(string studentYear, string filterYear)
+    {
+        if (string.IsNullOrEmpty(filterYear) || filterYear.StartsWith("All", StringComparison.OrdinalIgnoreCase))
+            return true;
+        return string.Equals(ToStandardDisplay(studentYear), ToStandardDisplay(filterYear), StringComparison.OrdinalIgnoreCase);
+    }
+}
+
 public record Field(string Label, string Value, string[] Choices = null);
 
 public static class PromptDialog
 {
-    /// <summary>Small modal form. Returns the entered values or null when cancelled.
-    /// Pass a non-null cover path (or "" for a new book) to include a drag & drop
-    /// Book Cover section below the fields; the picked image is available via the returned zone.</summary>
-    public static string[] Show(IWin32Window owner, string title, out CoverDropZone coverZone, string existingCoverPath, params Field[] fields)
+    /// <summary>Small modal form without a book cover section (used for student forms etc.).</summary>
+    public static string[] Show(IWin32Window owner, string title, params Field[] fields)
     {
-        int h = 20 + fields.Length * 58 + 64 + 160;   // + room for the Book Cover section
+        int h = 20 + fields.Length * 58 + 64;
+        using var f = new Form
+        {
+            Text = title, FormBorderStyle = FormBorderStyle.FixedDialog, StartPosition = FormStartPosition.CenterParent,
+            MaximizeBox = false, MinimizeBox = false, ClientSize = new Size(380, h), BackColor = Theme.Card, Font = Theme.F(9.5f)
+        };
+        var inputs = new List<Control>();
+        int y = 14;
+        foreach (var fd in fields)
+        {
+            f.Controls.Add(new Label { Text = fd.Label, Left = 20, Top = y, AutoSize = true, ForeColor = Theme.Ink });
+            Control c;
+            if (fd.Choices != null)
+            {
+                var cb = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Left = 20, Top = y + 22, Width = 340 };
+                cb.Items.AddRange(fd.Choices);
+                cb.SelectedItem = fd.Value;
+                if (cb.SelectedIndex < 0 && cb.Items.Count > 0) cb.SelectedIndex = 0;
+                c = cb;
+            }
+            else c = new TextBox { Left = 20, Top = y + 22, Width = 340, Text = fd.Value };
+            f.Controls.Add(c);
+            inputs.Add(c);
+            y += 58;
+        }
+
+        var ok = Theme.Btn("Save", Theme.Green, Color.White, 90, 32);
+        ok.Location = new Point(170, y + 6);
+        ok.DialogResult = DialogResult.OK;
+        var cancel = Theme.Btn("Cancel", Theme.Brown, Color.White, 90, 32);
+        cancel.Location = new Point(270, y + 6);
+        cancel.DialogResult = DialogResult.Cancel;
+        f.Controls.Add(ok);
+        f.Controls.Add(cancel);
+        f.AcceptButton = ok;
+        f.CancelButton = cancel;
+        if (f.ShowDialog(owner) != DialogResult.OK) return null;
+        return inputs.Select(c => c.Text).ToArray();
+    }
+
+    /// <summary>Dialog with a drag & drop book cover section (used specifically for Book forms).</summary>
+    public static string[] ShowWithCover(IWin32Window owner, string title, out CoverDropZone coverZone, string existingCoverPath, bool showDelete = true, params Field[] fields)
+    {
+        int h = 20 + fields.Length * 58 + 64 + 180;   // + room for the Book Cover section (zone + delete button)
         using var f = new Form
         {
             Text = title, FormBorderStyle = FormBorderStyle.FixedDialog, StartPosition = FormStartPosition.CenterParent,
@@ -369,11 +498,12 @@ public static class PromptDialog
             y += 58;
         }
         f.Controls.Add(new Label { Text = "Book Cover", Left = 20, Top = y, AutoSize = true, ForeColor = Theme.Ink });
-        var zone = new CoverDropZone(340, 130, existingCoverPath);
+        var zone = new CoverDropZone(340, 150, existingCoverPath);
         zone.Location = new Point(20, y + 22);
         f.Controls.Add(zone);
+        if (!showDelete) zone.HideDeleteButton();
         coverZone = zone;
-        y += 160;
+        y += 180;
 
         var ok = Theme.Btn("Save", Theme.Green, Color.White, 90, 32);
         ok.Location = new Point(170, y + 6);
@@ -388,10 +518,6 @@ public static class PromptDialog
         if (f.ShowDialog(owner) != DialogResult.OK) { coverZone = new CoverDropZone(0, 0, ""); return null; }
         return inputs.Select(c => c.Text).ToArray();
     }
-
-    /// <summary>Dialog without a book cover section (used for student forms etc.).</summary>
-    public static string[] Show(IWin32Window owner, string title, params Field[] fields)
-        => Show(owner, title, out _, null, fields);
 }
 
 public class StatCard : RoundedPanel
@@ -416,13 +542,228 @@ public class StatCard : RoundedPanel
     public string Value { set { val.Text = value; } }
 }
 
+/// <summary>Stat card with independent From/To calendar date filters and Clear option.</summary>
+public class DateFilterStatCard : RoundedPanel
+{
+    readonly Label valLabel;
+    readonly Label lblStatus;
+    readonly DateTimePicker dtpFrom;
+    readonly DateTimePicker dtpTo;
+    readonly LinkLabel btnClear;
+    readonly Func<Student, bool> statusFilter;
+    bool hasFilter = false;
+    bool isUpdating = false;
+
+    public DateFilterStatCard(string glyph, string title, Color glyphColor, Func<Student, bool> filter)
+    {
+        statusFilter = filter;
+        Fill = Theme.CardDark;
+        Dock = DockStyle.Fill;
+        Margin = new Padding(0, 0, 10, 0);
+
+        var g = new Label
+        {
+            Text = glyph, Font = Theme.E(15), ForeColor = glyphColor,
+            AutoSize = true, BackColor = Color.Transparent, Location = new Point(8, 8)
+        };
+        var t = Theme.Lbl(title, 8.5f, FontStyle.Bold);
+        t.Location = new Point(32, 6);
+
+        valLabel = Theme.Lbl("0", 13, FontStyle.Bold, glyphColor);
+        valLabel.Location = new Point(32, 22);
+
+        var lblFrom = new Label
+        {
+            Text = "From:", Font = Theme.F(7.5f), ForeColor = Theme.Muted,
+            AutoSize = true, BackColor = Color.Transparent, Location = new Point(8, 48)
+        };
+        dtpFrom = new DateTimePicker
+        {
+            Format = DateTimePickerFormat.Short,
+            Font = Theme.F(7.5f),
+            Location = new Point(44, 46),
+            Size = new Size(86, 20)
+        };
+        dtpFrom.Value = DateTime.Today.AddMonths(-1);
+
+        lblStatus = new Label
+        {
+            Text = "All dates", Font = Theme.F(7.5f), ForeColor = Theme.Muted,
+            AutoSize = true, BackColor = Color.Transparent, Location = new Point(136, 48)
+        };
+
+        var lblTo = new Label
+        {
+            Text = "To:", Font = Theme.F(7.5f), ForeColor = Theme.Muted,
+            AutoSize = true, BackColor = Color.Transparent, Location = new Point(8, 74)
+        };
+        dtpTo = new DateTimePicker
+        {
+            Format = DateTimePickerFormat.Short,
+            Font = Theme.F(7.5f),
+            Location = new Point(44, 72),
+            Size = new Size(86, 20)
+        };
+        dtpTo.Value = DateTime.Today;
+
+        btnClear = new LinkLabel
+        {
+            Text = "Clear", Font = Theme.F(7.5f, FontStyle.Bold), LinkColor = Theme.Brown,
+            ActiveLinkColor = Theme.Brown, VisitedLinkColor = Theme.Brown,
+            LinkBehavior = LinkBehavior.HoverUnderline,
+            AutoSize = true, BackColor = Color.Transparent, Location = new Point(136, 74)
+        };
+        btnClear.Click += (s, e) => Clear();
+
+        Resize += (s, e) =>
+        {
+            int rx = Math.Max(132, dtpFrom.Right + 6);
+            lblStatus.Left = rx;
+            btnClear.Left = rx;
+        };
+
+        dtpFrom.ValueChanged += (s, e) => OnDateChanged(true);
+        dtpTo.ValueChanged += (s, e) => OnDateChanged(false);
+
+        Controls.AddRange(new Control[] { g, t, valLabel, lblFrom, dtpFrom, lblStatus, lblTo, dtpTo, btnClear });
+
+        UpdateCount();
+    }
+
+    void OnDateChanged(bool isFrom)
+    {
+        if (isUpdating) return;
+        if (dtpTo.Value.Date < dtpFrom.Value.Date)
+        {
+            isUpdating = true;
+            MessageBox.Show("The 'To' date cannot be earlier than the 'From' date.", "Invalid Date Range",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            if (isFrom)
+                dtpFrom.Value = dtpTo.Value.Date;
+            else
+                dtpTo.Value = dtpFrom.Value.Date;
+            isUpdating = false;
+            return;
+        }
+
+        hasFilter = true;
+        lblStatus.Text = "Filtered";
+        lblStatus.ForeColor = Theme.Green;
+        UpdateCount();
+    }
+
+    public void Clear()
+    {
+        isUpdating = true;
+        hasFilter = false;
+        dtpFrom.Value = DateTime.Today.AddMonths(-1);
+        dtpTo.Value = DateTime.Today;
+        lblStatus.Text = "All dates";
+        lblStatus.ForeColor = Theme.Muted;
+        isUpdating = false;
+        UpdateCount();
+    }
+
+    public void UpdateCount()
+    {
+        int count;
+        if (hasFilter)
+        {
+            var from = dtpFrom.Value.Date;
+            var to = dtpTo.Value.Date;
+            count = AppData.Students.Count(s => statusFilter(s) && s.Joined.Date >= from && s.Joined.Date <= to);
+        }
+        else
+        {
+            count = AppData.Students.Count(statusFilter);
+        }
+        valLabel.Text = count.ToString("N0");
+    }
+}
+
+/// <summary>Tab button with an icon, title, and count pill badge (e.g. Borrow Requests, Return Requests).</summary>
+public class RequestTab : Control
+{
+    public bool IsSelected { get; set; }
+    public string Glyph { get; }
+    public string Title { get; }
+    public int Count { get; set; }
+    public Color BadgeColor { get; }
+
+    public RequestTab(string glyph, string title, Color badgeColor, bool selected)
+    {
+        Glyph = glyph;
+        Title = title;
+        BadgeColor = badgeColor;
+        IsSelected = selected;
+        Cursor = Cursors.Hand;
+        DoubleBuffered = true;
+        SetStyle(ControlStyles.SupportsTransparentBackColor, true);
+        BackColor = Color.Transparent;
+        Height = 36;
+        Width = 180;
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        var r = new Rectangle(0, 0, Width - 1, Height - 1);
+        if (IsSelected)
+        {
+            using var path = Theme.Round(r, 6);
+            using var br = new SolidBrush(Color.White);
+            using var pen = new Pen(Color.FromArgb(0xDC, 0xD0, 0xBD));
+            e.Graphics.FillPath(br, path);
+            e.Graphics.DrawPath(pen, path);
+        }
+        else
+        {
+            using var path = Theme.Round(r, 6);
+            using var br = new SolidBrush(Color.FromArgb(0xEB, 0xDE, 0xCD));
+            e.Graphics.FillPath(br, path);
+        }
+
+        // Glyph
+        using var gFont = Theme.E(11f);
+        TextRenderer.DrawText(e.Graphics, Glyph, gFont, new Point(12, (Height - 18) / 2), Theme.Ink);
+
+        // Title
+        using var tFont = Theme.F(9f, IsSelected ? FontStyle.Bold : FontStyle.Regular);
+        var tSize = TextRenderer.MeasureText(Title, tFont);
+        int tY = (Height - tSize.Height) / 2;
+        TextRenderer.DrawText(e.Graphics, Title, tFont, new Point(34, tY), Theme.Ink);
+
+        // Badge
+        string countStr = Count.ToString();
+        using var bFont = Theme.F(7.5f, FontStyle.Bold);
+        var bSize = TextRenderer.MeasureText(countStr, bFont);
+        int bW = Math.Max(20, bSize.Width + 10);
+        int bH = 18;
+        int bX = 34 + tSize.Width + 8;
+        int bY = (Height - bH) / 2;
+        var bRect = new Rectangle(bX, bY, bW, bH);
+        using (var bPath = Theme.Round(bRect, 9))
+        using (var bBr = new SolidBrush(BadgeColor))
+        {
+            e.Graphics.FillPath(bBr, bPath);
+        }
+        TextRenderer.DrawText(e.Graphics, countStr, bFont, bRect, Color.White,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+
+        int totalNeeded = bX + bW + 12;
+        if (Width != totalNeeded) Width = totalNeeded;
+    }
+}
+
 public static class Ui
 {
-    public static Panel StatRow(params StatCard[] cards)
+    public static Panel StatRow(params Control[] cards) => StatRow(78, cards);
+
+    public static Panel StatRow(int height, params Control[] cards)
     {
         var t = new TableLayoutPanel
         {
-            Dock = DockStyle.Top, Height = 78, ColumnCount = cards.Length, RowCount = 1,
+            Dock = DockStyle.Top, Height = height, ColumnCount = cards.Length, RowCount = 1,
             BackColor = Color.Transparent, Padding = new Padding(0, 0, 0, 10)
         };
         t.RowStyles.Add(new RowStyle(SizeType.Percent, 100));

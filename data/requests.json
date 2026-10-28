@@ -1,0 +1,110 @@
+[
+  {
+    "Id": "BR-2025-0048",
+    "Type": "Borrow",
+    "StudentId": "2023-0142",
+    "StudentName": "Maria Santos",
+    "BookTitle": "The Alchemist",
+    "BookAuthor": "Paulo Coelho",
+    "BookIsbn": "9780062315007",
+    "BookCoverPath": "",
+    "Date": "2025-05-16T09:30:00",
+    "Status": "Approved"
+  },
+  {
+    "Id": "BR-2025-0049",
+    "Type": "Borrow",
+    "StudentId": "2024-0089",
+    "StudentName": "Juan Dela Cruz",
+    "BookTitle": "To Kill a Mockingbird",
+    "BookAuthor": "Harper Lee",
+    "BookIsbn": "9780060935467",
+    "BookCoverPath": "",
+    "Date": "2025-05-16T10:15:00",
+    "Status": "Approved"
+  },
+  {
+    "Id": "BR-2025-0050",
+    "Type": "Borrow",
+    "StudentId": "2022-0315",
+    "StudentName": "Angela Reyes",
+    "BookTitle": "1984",
+    "BookAuthor": "George Orwell",
+    "BookIsbn": "9780451524935",
+    "BookCoverPath": "",
+    "Date": "2025-05-17T13:20:00",
+    "Status": "Rejected"
+  },
+  {
+    "Id": "BR-2025-0051",
+    "Type": "Borrow",
+    "StudentId": "2023-0511",
+    "StudentName": "Mark Bautista",
+    "BookTitle": "The Great Gatsby",
+    "BookAuthor": "F. Scott Fitzgerald",
+    "BookIsbn": "9780743273565",
+    "BookCoverPath": "",
+    "Date": "2025-05-17T14:45:00",
+    "Status": "Rejected"
+  },
+  {
+    "Id": "BR-2025-0052",
+    "Type": "Borrow",
+    "StudentId": "2025-0104",
+    "StudentName": "Chloe Garcia",
+    "BookTitle": "Clean Code",
+    "BookAuthor": "Robert C. Martin",
+    "BookIsbn": "9780132350884",
+    "BookCoverPath": "",
+    "Date": "2025-05-18T11:00:00",
+    "Status": "Approved"
+  },
+  {
+    "Id": "RR-2025-0012",
+    "Type": "Return",
+    "StudentId": "2023-0210",
+    "StudentName": "Carlos Mendoza",
+    "BookTitle": "Pride and Prejudice",
+    "BookAuthor": "Jane Austen",
+    "BookIsbn": "9780141439518",
+    "BookCoverPath": "",
+    "Date": "2025-05-18T08:30:00",
+    "Status": "Approved"
+  },
+  {
+    "Id": "RR-2025-0013",
+    "Type": "Return",
+    "StudentId": "2024-0418",
+    "StudentName": "Liza Soberano",
+    "BookTitle": "Sapiens",
+    "BookAuthor": "Yuval Noah Harari",
+    "BookIsbn": "9780062316097",
+    "BookCoverPath": "",
+    "Date": "2025-05-18T09:15:00",
+    "Status": "Approved"
+  },
+  {
+    "Id": "BR-2026-0008",
+    "Type": "Borrow",
+    "StudentId": "20251362-C",
+    "StudentName": "rengie lago",
+    "BookTitle": "The Alchemist",
+    "BookAuthor": "Paulo Coelho",
+    "BookIsbn": "9780062315007",
+    "BookCoverPath": "",
+    "Date": "2026-10-28T21:14:15.3399443+08:00",
+    "Status": "Approved"
+  },
+  {
+    "Id": "BR-2026-0009",
+    "Type": "Borrow",
+    "StudentId": "20251362-C",
+    "StudentName": "rengie lago",
+    "BookTitle": "To Kill a Mockingbird",
+    "BookAuthor": "Harper Lee",
+    "BookIsbn": "9780060935467",
+    "BookCoverPath": "",
+    "Date": "2026-10-28T21:14:15.3399499+08:00",
+    "Status": "Approved"
+  }
+]
