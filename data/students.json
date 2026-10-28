@@ -1,0 +1,16 @@
+[
+  {
+    "Id": "20251362-C",
+    "Name": "rengie lago",
+    "Email": "student@library.edu",
+    "Password": "password123",
+    "Program": "BS Computer Science",
+    "Section": "A",
+    "Year": "2",
+    "Contact": "09123456789",
+    "AvatarPath": "C:\\Users\\lagor\\Documents\\LibraryInventory\\data\\avatars\\20251362-C.png",
+    "Active": true,
+    "Joined": "2026-10-28T00:00:00+08:00",
+    "Course": "BS Computer Science"
+  }
+]
