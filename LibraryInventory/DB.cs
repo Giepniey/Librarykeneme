@@ -14,6 +14,21 @@ public class Db
 
     public Db()
     {
+        // Create the LIS database first if it doesn't exist yet.
+        try
+        {
+            using var boot = new MySqlConnection($"Server={server};Port={port};Uid={uid};Pwd=");
+            boot.Open();
+            using var c = boot.CreateCommand();
+            c.CommandText = $"CREATE DATABASE IF NOT EXISTS `{db}`";
+            c.ExecuteNonQuery();
+        }
+        catch (Exception e)
+        {
+            throw new InvalidOperationException(
+                "Cannot connect to MySQL at " + server + ":" + port + ". Start MySQL (XAMPP/MySQL service) and try again. " + e.Message, e);
+        }
+
         connection = new MySqlConnection(con_str);
         for (int i = 0; i < 3; i++)
         {

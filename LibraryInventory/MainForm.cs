@@ -110,7 +110,15 @@ public class AuthPage : BackdropPanel
                         MessageBox.Show("Passwords do not match.", "Library Inventory System");
                         return;
                     }
-                    MessageBox.Show("Account created (demo only - nothing is stored). You can now log in.", "Library Inventory System");
+                    if (AppData.Students.Any(x => x.Id.Equals(name, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        MessageBox.Show("That username already exists.", "Library Inventory System");
+                        return;
+                    }
+                    var ns = new Student { Id = name, Name = name, Password = pass.Box.Text, Email = name + "@library.edu", Program = "-", Year = "-", Section = "-", Contact = "-", Joined = DateTime.Today };
+                    Database.SaveStudent(ns);
+                    AppData.Students.Add(ns);
+                    MessageBox.Show("Account created and saved. You can now log in.", "Library Inventory System");
                     main.Navigate(new AuthPage(main, false));
                     return;
                 }
@@ -146,7 +154,7 @@ public class AuthPage : BackdropPanel
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Login error: " + ex.GetType().Name + ": " + ex.Message + Environment.NewLine + ex.StackTrace, "Library Inventory System", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Login error: " + ex.GetType().Name + ": " + ex.Message + Environment.NewLine + Environment.NewLine + "INNER: " + (ex.InnerException?.ToString() ?? "none"), "Library Inventory System", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         };
 

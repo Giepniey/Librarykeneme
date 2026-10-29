@@ -7,6 +7,13 @@ namespace LibraryInventory;
 
 public static class Database
 {
+    // ---- password hashing (bcrypt) ----
+    public static bool IsHash(string v) => !string.IsNullOrEmpty(v) && v.StartsWith("$2") && v.Length == 60;
+    public static string HashPassword(string p) => IsHash(p) ? p : BCrypt.Net.BCrypt.HashPassword(p ?? "");
+    static bool CheckPassword(string typed, string stored)
+        => IsHash(stored) ? BCrypt.Net.BCrypt.Verify(typed ?? "", stored) : stored == typed; // plain-text = old accounts
+
+
     static readonly string DataRoot;
     static readonly string DbPath;
     static readonly string AvatarDir;
@@ -44,7 +51,7 @@ public static class Database
             string[] creates = new[]
             {
                 @"CREATE TABLE IF NOT EXISTS students (
-                    student_id VARCHAR(20) PRIMARY KEY,
+                    student_id VARCHAR(20) NOT NULL,
                     full_name VARCHAR(140) NOT NULL,
                     email VARCHAR(160) NOT NULL,
                     password VARCHAR(120) NOT NULL,
@@ -114,9 +121,26 @@ public static class Database
 
             foreach (var sql in creates)
             {
-                using var cmd = Db.Instance.Connection.CreateCommand();
-                cmd.CommandText = sql;
-                cmd.ExecuteNonQuery();
+                try
+                {
+                    using var cmd = Db.Instance.Connection.CreateCommand();
+                    cmd.CommandText = sql;
+                    cmd.ExecuteNonQuery();
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Create table failed: " + e.Message);
+                }
+            }
+ 
+            // Upgrade tables created by older versions of the app
+            foreach (var alter in new[] {
+                "ALTER TABLE students ADD COLUMN is_sa TINYINT(1) NOT NULL DEFAULT 0",
+                "ALTER TABLE students ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'student'",
+                "ALTER TABLE students ADD COLUMN avatar_path VARCHAR(260) NOT NULL DEFAULT ''" })
+            {
+                try { using var a = Db.Instance.Connection.CreateCommand(); a.CommandText = alter; a.ExecuteNonQuery(); }
+                catch { /* column already exists */ }
             }
         }
         catch (Exception e)
@@ -185,7 +209,7 @@ public static class Database
         cmd.Parameters.Add(new MySqlParameter("@id", s.Id));
         cmd.Parameters.Add(new MySqlParameter("@name", s.Name ?? ""));
         cmd.Parameters.Add(new MySqlParameter("@email", s.Email ?? ""));
-        cmd.Parameters.Add(new MySqlParameter("@pass", s.Password ?? ""));
+        cmd.Parameters.Add(new MySqlParameter("@pass", HashPassword(s.Password ?? "")));
         cmd.Parameters.Add(new MySqlParameter("@program", s.Program ?? ""));
         cmd.Parameters.Add(new MySqlParameter("@year", s.Year ?? ""));
         cmd.Parameters.Add(new MySqlParameter("@section", s.Section ?? ""));
@@ -527,12 +551,21 @@ public static class Database
         try
         {
             using var cmd = Db.Instance.Connection.CreateCommand();
-            cmd.CommandText = "SELECT id, username, password FROM admins WHERE username = @u AND password = @p";
+            cmd.CommandText = "SELECT id, username, password FROM admins WHERE username = @u";
             cmd.Parameters.Add(new MySqlParameter("@u", username ?? ""));
-            cmd.Parameters.Add(new MySqlParameter("@p", password ?? ""));
-            using var rd = cmd.ExecuteReader();
-            if (rd.Read()) return new Admin { Id = rd.GetInt32(0), Username = rd.GetString(1), Password = rd.GetString(2) };
-            return null;
+            Admin found = null;
+            using (var rd = cmd.ExecuteReader())
+                if (rd.Read()) found = new Admin { Id = rd.GetInt32(0), Username = rd.GetString(1), Password = rd.GetString(2) };
+            if (found == null || !CheckPassword(password, found.Password)) return null;
+            if (!IsHash(found.Password))   // upgrade old plain-text password
+            {
+                using var up = Db.Instance.Connection.CreateCommand();
+                up.CommandText = "UPDATE admins SET password = @h WHERE id = @id";
+                up.Parameters.Add(new MySqlParameter("@h", HashPassword(password)));
+                up.Parameters.Add(new MySqlParameter("@id", found.Id));
+                up.ExecuteNonQuery();
+            }
+            return found;
         }
         catch (Exception e)
         {
@@ -546,13 +579,12 @@ public static class Database
         try
         {
             using var cmd = Db.Instance.Connection.CreateCommand();
-            cmd.CommandText = "SELECT student_id, full_name, email, password, program, year, section, contact, status, joined, avatar_path, is_sa FROM students WHERE student_id = @id AND password = @p";
+            cmd.CommandText = "SELECT student_id, full_name, email, password, program, year, section, contact, status, joined, avatar_path, is_sa FROM students WHERE student_id = @id";
             cmd.Parameters.Add(new MySqlParameter("@id", id));
-            cmd.Parameters.Add(new MySqlParameter("@p", password));
             using var rd = cmd.ExecuteReader();
-            if (rd.Read())
+            if (rd.Read() && CheckPassword(password, rd.GetString(3)))
             {
-                return new Student
+                var st = new Student
                 {
                     Id = rd.GetString(0),
                     Name = rd.GetString(1),
@@ -567,6 +599,9 @@ public static class Database
                     AvatarPath = rd.GetString(10),
                     IsSa = rd.GetByte(11) != 0
                 };
+                rd.Close();
+                if (!IsHash(st.Password)) { st.Password = HashPassword(st.Password); SaveStudentToDatabase(st); }
+                return st;
             }
         }
         catch (Exception e)
@@ -581,7 +616,7 @@ public static class Database
         using var cmd = Db.Instance.Connection.CreateCommand();
         cmd.CommandText = "INSERT INTO admins (username, password) VALUES (@u, @p) ON DUPLICATE KEY UPDATE password = VALUES(password);";
         cmd.Parameters.Add(new MySqlParameter("@u", admin.Username));
-        cmd.Parameters.Add(new MySqlParameter("@p", admin.Password));
+        cmd.Parameters.Add(new MySqlParameter("@p", HashPassword(admin.Password)));
         cmd.ExecuteNonQuery();
     }
 
@@ -598,7 +633,7 @@ public static class Database
             if (adminCount == 0)
             {
                 using var insAdm = Db.Instance.Connection.CreateCommand();
-                insAdm.CommandText = "INSERT INTO admins (username, password) VALUES ('admin', 'admin123')";
+                insAdm.CommandText = "INSERT INTO admins (username, password) VALUES ('admin', '" + HashPassword("admin123") + "')";
                 insAdm.ExecuteNonQuery();
             }
         }
