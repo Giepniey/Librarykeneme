@@ -30,6 +30,10 @@ public class Student
     public bool IsSa { get; set; } = false;
     public DateTime Joined { get; set; } = DateTime.Today;
 
+    /// <summary>True once the student has filled in program, year, section and contact (sign-up leaves them as "-").</summary>
+    public bool ProfileComplete =>
+        new[] { Program, Year, Section, Contact }.All(v => !string.IsNullOrWhiteSpace(v) && v.Trim() != "-");
+
     // Legacy compatibility
     public string Course { get => Program; set => Program = value; }
 }
@@ -76,6 +80,9 @@ public static class AppData
     public static Student Me;
     public static string UserName = "user";
     public static bool Suspended;
+
+    public static event Action ProfileChanged;
+    public static void RaiseProfileChanged() => ProfileChanged?.Invoke();
 
     public static event Action CartChanged;
     public static void RaiseCartChanged() => CartChanged?.Invoke();

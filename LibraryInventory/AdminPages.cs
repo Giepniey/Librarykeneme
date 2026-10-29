@@ -188,13 +188,8 @@ public class ManageStudentsPage : PageBase
     readonly DateFilterStatCard sInactive = new DateFilterStatCard("✖", "Inactive Students", Color.FromArgb(0xD0, 0x20, 0x20), s => !s.Active);
     readonly DateFilterStatCard sNew = new DateFilterStatCard("＋", "New Registrations", Color.FromArgb(0xE0, 0x8A, 0x00), s => true);
 
-    public ManageStudentsPage() : base("Manage Student", "View, add, edit, and manage accounts")
+    public ManageStudentsPage() : base("Manage Student", "View, edit, and manage accounts")
     {
-        var add = Theme.Btn("+ Add New Student", Theme.Brown, Color.White, 170, 36, 10);
-        Header.Controls.Add(add);
-        Header.Resize += (s, e) => add.Location = new Point(Header.Width - add.Width, 6);
-        add.Click += (s, e) => Edit(null);
-
         g.Columns.Add(Tables.Text("id", "Student ID", 70));
         g.Columns.Add(Tables.Text("name", "Full Name", 100));
         g.Columns.Add(Tables.Text("email", "Email Address", 110));

@@ -110,13 +110,14 @@ public class AuthPage : BackdropPanel
                         MessageBox.Show("Passwords do not match.", "Library Inventory System");
                         return;
                     }
-                    if (AppData.Students.Any(x => x.Id.Equals(name, StringComparison.OrdinalIgnoreCase)))
+                    if (Database.GetStudent(name, "") != null || AppData.Students.Any(x => x.Id.Equals(name, StringComparison.OrdinalIgnoreCase)))
                     {
                         MessageBox.Show("That username already exists.", "Library Inventory System");
                         return;
                     }
                     var ns = new Student { Id = name, Name = name, Password = pass.Box.Text, Email = name + "@library.edu", Program = "-", Year = "-", Section = "-", Contact = "-", Joined = DateTime.Today };
                     Database.SaveStudent(ns);
+                    ns.Password = Database.HashPassword(ns.Password);
                     AppData.Students.Add(ns);
                     MessageBox.Show("Account created and saved. You can now log in.", "Library Inventory System");
                     main.Navigate(new AuthPage(main, false));
@@ -133,6 +134,10 @@ public class AuthPage : BackdropPanel
                     var student = Database.GetStudent(name, pass.Box.Text);
                     if (student != null && student.Active)
                     {
+                        // Keep ONE shared copy of this student in AppData.Students, so later saves
+                        // (e.g. admin actions) never overwrite fresh data with an old copy.
+                        int idx = AppData.Students.FindIndex(x => x.Id == student.Id);
+                        if (idx >= 0) AppData.Students[idx] = student; else AppData.Students.Add(student);
                         AppData.Me = student;
                         // Student assistants get the full admin workspace; regular students
                         // get the student account screens.

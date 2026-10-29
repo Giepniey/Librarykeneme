@@ -10,7 +10,7 @@ public static class Database
     // ---- password hashing (bcrypt) ----
     public static bool IsHash(string v) => !string.IsNullOrEmpty(v) && v.StartsWith("$2") && v.Length == 60;
     public static string HashPassword(string p) => IsHash(p) ? p : BCrypt.Net.BCrypt.HashPassword(p ?? "");
-    static bool CheckPassword(string typed, string stored)
+    public static bool CheckPassword(string typed, string stored)
         => IsHash(stored) ? BCrypt.Net.BCrypt.Verify(typed ?? "", stored) : stored == typed; // plain-text = old accounts
 
 
@@ -671,6 +671,8 @@ public static class Validator
         if (string.IsNullOrWhiteSpace(name)) return (false, "Full Name is required");
         var words = name.Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
         if (words.Length < 2) return (false, "Full Name must have at least 2 words");
+        if (!System.Text.RegularExpressions.Regex.IsMatch(name.Trim(), @"^[\p{L} ]+$"))
+            return (false, "Full Name can only contain letters and spaces");
         return (true, "");
     }
 
@@ -707,7 +709,7 @@ public static class Validator
 
     public static (bool valid, string error) ValidateProgram(string program)
     {
-        if (string.IsNullOrWhiteSpace(program)) return (false, "Program is required");
+        if (string.IsNullOrWhiteSpace(program) || program.Trim() == "-") return (false, "Program is required");
         if (System.Text.RegularExpressions.Regex.IsMatch(program, @"\d")) return (false, "Program cannot contain numbers");
         return (true, "");
     }

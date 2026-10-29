@@ -6,9 +6,11 @@ public class BrowseBooksPage : PageBase
     readonly SearchBox search;
     readonly List<Button> tabs = new();
     string cat = "ALL";
+    readonly Shell shell;
 
     public BrowseBooksPage(Shell shell) : base("Browse Books", "Explore the library collection")
     {
+        this.shell = shell;
         flow = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, BackColor = Color.Transparent, Padding = new Padding(0, 4, 0, 70) };
 
         var tabBar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 48, BackColor = Color.Transparent, WrapContents = false };
@@ -55,6 +57,7 @@ public class BrowseBooksPage : PageBase
 
     void AddToCart(Book b)
     {
+        if (AppData.Me != null && !AppData.Me.ProfileComplete) { shell.PromptCompleteProfile(true); return; }
         if (AppData.Suspended) { MessageBox.Show("Your account is suspended. Please contact the librarian.", "Account suspended"); return; }
         if (!b.Available) { MessageBox.Show("This book is currently borrowed.", "Not available"); return; }
         if (AppData.Cart.Contains(b)) { MessageBox.Show("This book is already in your cart.", "Book Cart"); return; }
@@ -259,6 +262,7 @@ public class AccountPage : PageBase
     public AccountPage() : base("Manage Account", "Update your profile, change your password, and more.")
     {
         var me = AppData.Me;
+        bool fresh = !me.ProfileComplete;   // new account: don't prefill name / student ID / email
 
         // --- profile card
         var profile = new RoundedPanel { Dock = DockStyle.Fill, Fill = Color.FromArgb(0xF3, 0xEC, 0xDD) };
@@ -275,10 +279,10 @@ public class AccountPage : PageBase
         change.Location = new Point(8, 74);
         change.Click += ChangePhoto_Click;
 
-        string shortName = me.Name.Split(' ').Length >= 3 ? $"{me.Name.Split(' ')[0]} {me.Name.Split(' ')[1][0]}. {me.Name.Split(' ')[^1]}" : me.Name;
+        string shortName = fresh ? "New Student" : me.Name.Split(' ').Length >= 3 ? $"{me.Name.Split(' ')[0]} {me.Name.Split(' ')[1][0]}. {me.Name.Split(' ')[^1]}" : me.Name;
         nmLabel = Theme.Lbl(shortName, 13, FontStyle.Bold); nmLabel.Location = new Point(110, 14);
-        idLabel = Theme.Lbl("Student ID: " + me.Id, 10, FontStyle.Bold); idLabel.Location = new Point(110, 42);
-        emLabel = Theme.Lbl("Email: " + me.Email, 10, FontStyle.Bold); emLabel.Location = new Point(110, 62);
+        idLabel = Theme.Lbl("Student ID: " + (fresh ? "Not set" : me.Id), 10, FontStyle.Bold); idLabel.Location = new Point(110, 42);
+        emLabel = Theme.Lbl("Email: " + (fresh ? "Not set" : me.Email), 10, FontStyle.Bold); emLabel.Location = new Point(110, 62);
         var div = new Panel { Width = 1, BackColor = Theme.Border };
         var stTitle = Theme.Lbl("Account Status", 10, FontStyle.Bold);
         var chip = new Label { AutoSize = false, Size = new Size(110, 20), TextAlign = ContentAlignment.MiddleCenter, Font = Theme.F(8.5f), ForeColor = Color.White, Cursor = Cursors.Hand };
@@ -305,10 +309,10 @@ public class AccountPage : PageBase
         info.Controls.Add(head);
 
         // Left column
-        txtFullName = AddField(info, "Full Name", me.Name, 12, 38, 190, 96);
-        txtStudentId = AddField(info, "Student ID", me.Id, 12, 68, 190, 96);
-        txtEmail = AddField(info, "Email", me.Email, 12, 98, 250, 96);
-        txtPassword = AddField(info, "Password", me.Password, 12, 128, 220, 96);
+        txtFullName = AddField(info, "Full Name", fresh ? "" : me.Name, 12, 38, 190, 96);
+        txtStudentId = AddField(info, "Student ID", fresh ? "" : me.Id, 12, 68, 190, 96);
+        txtEmail = AddField(info, "Email", fresh ? "" : me.Email, 12, 98, 250, 96);
+        txtPassword = AddField(info, "New Password", "", 12, 128, 220, 96);
         txtPassword.UseSystemPasswordChar = true;   // masked on load and in view mode
 
         // Password show/hide button
@@ -519,6 +523,7 @@ public class AccountPage : PageBase
                 nmLabel.Text = shortName;
                 idLabel.Text = "Student ID: " + me.Id;
                 emLabel.Text = "Email: " + me.Email;
+                AppData.RaiseProfileChanged();
 
                 MessageBox.Show("Profile updated successfully.", "Manage Account", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
@@ -556,7 +561,7 @@ public class AccountPage : PageBase
         }
 
         // Validate Password
-        var pwdResult = Validator.ValidatePassword(txtPassword.Text);
+        var pwdResult = txtPassword.Text.Length == 0 ? (valid: true, error: "") : Validator.ValidatePassword(txtPassword.Text);
         if (!pwdResult.valid)
         {
             ShowError(txtPassword, pwdResult.error);
@@ -586,12 +591,52 @@ public class AccountPage : PageBase
         if (!valid)
             return false;
 
+        // Changing the password needs the current password + confirmation of the new one
+        if (txtPassword.Text.Length > 0)
+        {
+            using var f = new Form
+            {
+                Text = "Change password", FormBorderStyle = FormBorderStyle.FixedDialog, StartPosition = FormStartPosition.CenterParent,
+                MaximizeBox = false, MinimizeBox = false, ClientSize = new Size(360, 210), BackColor = Theme.Card
+            };
+            TextBox Row(string label, int y)
+            {
+                f.Controls.Add(new Label { Text = label, Bounds = new Rectangle(20, y, 320, 20), Font = Theme.F(10) });
+                var t = new TextBox { Bounds = new Rectangle(20, y + 22, 320, 26), UseSystemPasswordChar = true };
+                f.Controls.Add(t);
+                return t;
+            }
+            var cur = Row("Current password", 12);
+            var neu = Row("New password", 62);
+            var conf = Row("Confirm new password", 112);
+            neu.Text = txtPassword.Text;
+            var ok = Theme.Btn("Confirm", Theme.Green, Color.White, 120, 32, 10);
+            ok.Location = new Point(120, 166);
+            ok.Click += (s, e) => { f.DialogResult = DialogResult.OK; f.Close(); };
+            f.Controls.Add(ok);
+            if (f.ShowDialog(FindForm()) != DialogResult.OK) return false;
+
+            if (!Database.CheckPassword(cur.Text, me.Password))
+            {
+                MessageBox.Show("Current password is incorrect.", "Change password", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+            if (conf.Text != neu.Text)
+            {
+                MessageBox.Show("New password and confirmation do not match.", "Change password", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
+            var pw = Validator.ValidatePassword(neu.Text);
+            if (!pw.valid) { MessageBox.Show(pw.error, "Change password", MessageBoxButtons.OK, MessageBoxIcon.Error); return false; }
+            txtPassword.Text = neu.Text;
+        }
+
         // Save to database
         string previousId = me.Id;
         me.Name = txtFullName.Text.Trim();
         me.Id = Validator.NormalizeStudentId(txtStudentId.Text.Trim());
         me.Email = txtEmail.Text.Trim();
-        me.Password = txtPassword.Text;
+        if (txtPassword.Text.Length > 0) { me.Password = Database.HashPassword(txtPassword.Text); txtPassword.Text = ""; }   // blank = keep current password
         me.Program = txtProgram.Text.Trim();
         me.Section = cmbSection.SelectedItem?.ToString() ?? "A";
         me.Year = cmbYear.SelectedItem?.ToString() ?? "1";

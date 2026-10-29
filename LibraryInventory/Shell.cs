@@ -9,6 +9,16 @@ public class Shell : Panel
     readonly List<NavItem> items = new();
     readonly CartFab fab;
     Control page;
+    Label initialsLbl, welcomeLbl;
+
+    void RefreshWelcome()
+    {
+        string who = AppData.UserName;
+        if (!admin && AppData.Me != null)
+            who = AppData.Me.ProfileComplete ? (AppData.Me.Name.Trim().Split(' ')[0]) : "";
+        welcomeLbl.Text = who.Length == 0 ? "Welcome!" : $"Welcome, {who}!";
+        initialsLbl.Text = who.Length == 0 ? "" : AppData.Initials(who);
+    }
 
     public Shell(MainForm main, bool admin)
     {
@@ -38,6 +48,10 @@ public class Shell : Panel
         var role = Theme.Lbl(admin ? "Admin Menu" : "Student Account", 10, FontStyle.Bold);
         role.Location = new Point(14, 128);
         foreach (Control c in new Control[] { logo, name, line, initials, welcome, role }) sidebar.Controls.Add(c);
+        initialsLbl = initials;
+        welcomeLbl = welcome;
+        RefreshWelcome();
+        AppData.ProfileChanged += RefreshWelcome;
 
         // nav
         var defs = admin
@@ -61,7 +75,11 @@ public class Shell : Panel
             e.Graphics.DrawLine(p, 14, 6, 202, 6);
         };
         var logout = new NavItem("➜", "Log Out", "logout") { Location = new Point(0, 18) };
-        logout.Click += (s, e) => main.Navigate(new AuthPage(main, false));
+        logout.Click += (s, e) =>
+        {
+            if (MessageBox.Show("Are you sure you want to log out?", "Log Out", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                main.Navigate(new AuthPage(main, false));
+        };
         bottom.Controls.Add(logout);
         sidebar.Controls.Add(bottom);
 
@@ -74,11 +92,31 @@ public class Shell : Panel
             AppData.CartChanged += fab.Invalidate;
         }
 
-        Go(admin ? "dashboard" : "browse");
+        Go(admin ? "dashboard" : (AppData.Me != null && !AppData.Me.ProfileComplete ? "account" : "browse"));
+    }
+
+    /// <summary>Popup shown when an incomplete account tries to use cart/history. Continue opens Manage Account.</summary>
+    public void PromptCompleteProfile(bool goToAccount)
+    {
+        using var f = new Form
+        {
+            Text = "Complete your identification", FormBorderStyle = FormBorderStyle.FixedDialog, StartPosition = FormStartPosition.CenterParent,
+            MaximizeBox = false, MinimizeBox = false, ClientSize = new Size(380, 150), BackColor = Theme.Card
+        };
+        var msg = new Label { Text = "Please complete your identification first (program, year, section and contact number) in Manage Account.", Bounds = new Rectangle(20, 18, 340, 70), Font = Theme.F(10.5f) };
+        var cont = Theme.Btn("Continue", Theme.Green, Color.White, 120, 34, 10);
+        cont.Location = new Point(130, 100);
+        cont.Click += (s, e) => f.Close();
+        f.Controls.Add(msg);
+        f.Controls.Add(cont);
+        f.AcceptButton = null;
+        f.ShowDialog(FindForm());
+        if (goToAccount) Go("account");
     }
 
     protected override void Dispose(bool disposing)
     {
+        if (disposing) AppData.ProfileChanged -= RefreshWelcome;
         if (disposing && fab != null) AppData.CartChanged -= fab.Invalidate;
         base.Dispose(disposing);
     }
@@ -91,6 +129,11 @@ public class Shell : Panel
 
     public void Go(string key)
     {
+        if (!admin && AppData.Me != null && !AppData.Me.ProfileComplete && (key == "cart" || key == "history"))
+        {
+            PromptCompleteProfile(false);
+            return;
+        }
         if (page != null)
         {
             host.Controls.Remove(page);
