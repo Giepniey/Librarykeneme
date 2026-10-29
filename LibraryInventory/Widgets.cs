@@ -351,6 +351,7 @@ public static class Tables
             return t switch
             {
                 "RETURN" => (Color.FromArgb(0x1E, 0x7A, 0x2E), Color.White),
+                "APPROVED" => (Color.FromArgb(0x1E, 0x7A, 0x2E), Color.White),
                 "PENDING" => (Color.FromArgb(0xC9, 0x71, 0x0F), Color.White),
                 "OVERDUE" => (Color.FromArgb(0x9C, 0x1C, 0x14), Color.White),
                 _ => (Theme.Brown, Color.White)

@@ -178,7 +178,7 @@ public class BookCartPage : PageBase
         g.Columns.Add(Tables.SolidChip("action", "Action", 80));
         foreach (var l in AppData.Loans.Where(x => x.StudentId == AppData.Me.Id))
         {
-            int i = g.Rows.Add(l.Book.Title, l.Book.Author, l.Book.Isbn, l.Borrowed.ToString("MM/dd/yyyy"), l.Due.ToString("MM/dd/yyyy"), l.Status);
+            int i = g.Rows.Add(l.Book.Title, l.Book.Author, l.Book.Isbn, l.Borrowed.ToString("MM/dd/yyyy"), l.Due.ToString("MM/dd/yyyy"), l.Status == "RETURN" ? "APPROVED" : l.Status);
             g.Rows[i].Tag = l;
         }
         g.CellClick += (s, e) =>
@@ -204,7 +204,7 @@ public class HistoryPage : PageBase
     readonly DataGridView g;
     readonly SearchBox search;
 
-    public HistoryPage(bool admin) : base("History", admin ? "View, add, edit, and manage student accounts" : "Collection of your great deals")
+    public HistoryPage(bool admin) : base("History", admin ? "Borrow and return history" : "Collection of your great deals")
     {
         this.admin = admin;
         search = new SearchBox(admin ? "Search books by title, author, student id,...." : "Search books by title, author, ....");

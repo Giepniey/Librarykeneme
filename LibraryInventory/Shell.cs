@@ -41,7 +41,7 @@ public class Shell : Panel
 
         // nav
         var defs = admin
-            ? new[] { ("▦", "Dashboard", "dashboard"), ("📖", "Manage Books", "books"), ("👤", "Manage Students", "students"), ("📋", "Requests", "requests"), ("🕘", "History", "history") }
+            ? new[] { ("▦", "Dashboard", "dashboard"), ("📖", "Manage Books", "books"), ("👤", "Manage Students", "students"), ("📋", "Requests", "requests"), ("🕘", "History", "history"), ("🖨", "Print Format", "print") }
             : new[] { ("📚", "Browse Books", "browse"), ("📖", "Book Cart", "cart"), ("🕘", "History", "history"), ("👤", "Manage Account", "account") };
         int y = 158;
         foreach (var (glyph, text, key) in defs)
@@ -106,6 +106,7 @@ public class Shell : Panel
             "books" => new ManageBooksPage(this),
             "students" => new ManageStudentsPage(),
             "requests" => new RequestsPage(this),
+            "print" => new PrintFormatPage(this),
             _ => new Panel()
         };
         p.Dock = DockStyle.Fill;

@@ -1,3 +1,5 @@
+using System.Drawing.Printing;
+
 namespace LibraryInventory;
 
 public class AdminDashboardPage : PageBase
@@ -95,6 +97,7 @@ public class ManageBooksPage : PageBase
             else if (col == "del" && MessageBox.Show($"Delete \"{b.Title}\"?", "Delete book", MessageBoxButtons.YesNo) == DialogResult.Yes)
             {
                 AppData.Books.Remove(b);
+                AppData.SyncState();
                 Reload();
             }
         };
@@ -152,6 +155,7 @@ public class ManageBooksPage : PageBase
         if (zone?.CoverImage != null)
             b.CoverPath = Database.SaveCover(b, zone.CoverImage);
         AppData.Books.Add(b);
+        AppData.SyncState();
         Reload();
     }
 
@@ -166,6 +170,7 @@ public class ManageBooksPage : PageBase
             Database.DeleteCover(b);          // removes file + database entry, clears CoverPath
         else if (zone?.Changed == true && zone.CoverImage != null)
             b.CoverPath = Database.SaveCover(b, zone.CoverImage);
+        AppData.SyncState();
         Reload();   // refresh the books table so the new (or removed) cover shows right away
     }
 }
@@ -209,7 +214,7 @@ public class ManageStudentsPage : PageBase
             switch (g.Columns[e.ColumnIndex].Name)
             {
                 case "view":
-                    MessageBox.Show($"{st.Name}\nID: {st.Id}\nEmail: {st.Email}\n{st.Course} - {StudentYearHelper.ToStandardDisplay(st.Year)}\nStatus: {(st.Active ? "Active" : "Inactive")}", "Student");
+                    MessageBox.Show($"{st.Name}\nID: {st.Id}\nEmail: {st.Email}\nFunction: {(st.IsSa ? "Student Assistant" : "Student")}\n{st.Course} - {StudentYearHelper.ToStandardDisplay(st.Year)}\nStatus: {(st.Active ? "Active" : "Inactive")}", "Student");
                     break;
                 case "edit": Edit(st); break;
                 case "del":
@@ -273,6 +278,7 @@ public class ManageStudentsPage : PageBase
             new Field("Student ID", st?.Id ?? ""),
             new Field("Full Name", st?.Name ?? ""),
             new Field("Email Address", st?.Email ?? ""),
+            new Field("Function", st != null && st.IsSa ? "Student Assistant" : "Student", new[] { "Student", "Student Assistant" }),
             new Field("Course", st?.Course ?? "BS Computer Science", new[] { "BS Computer Science", "BS Information Technology", "BS Psychology", "BS Engineering" }),
             new Field("Year Level", StudentYearHelper.ToStandardDisplay(st?.Year), new[] { "1st Year", "2nd Year", "3rd Year", "4th Year" }),
             new Field("Status", st == null || st.Active ? "Active" : "Inactive", new[] { "Active", "Inactive" }));
@@ -280,7 +286,7 @@ public class ManageStudentsPage : PageBase
         if (string.IsNullOrWhiteSpace(v[0]) || string.IsNullOrWhiteSpace(v[1])) { MessageBox.Show("Student ID and full name are required.", "Student"); return; }
         string prevId = st?.Id;
         st ??= new Student { Joined = DateTime.Today };
-        st.Id = v[0].Trim(); st.Name = v[1].Trim(); st.Email = v[2].Trim(); st.Course = v[3]; st.Year = v[4]; st.Active = v[5] == "Active";
+        st.Id = v[0].Trim(); st.Name = v[1].Trim(); st.Email = v[2].Trim(); st.IsSa = v[3] == "Student Assistant"; st.Course = v[4]; st.Year = v[5]; st.Active = v[6] == "Active";
         if (isNew) AppData.Students.Add(st);
         Database.SaveStudent(st, prevId);
         Reload();
@@ -826,5 +832,146 @@ public class RequestsPage : PageBase
         lblReturnInfo.Text = $"Showing 1–{pendingReturns.Count} of {pendingReturns.Count} requests";
         tabReturn.Count = pendingReturns.Count;
         tabReturn.Invalidate();
+    }
+}
+
+/// <summary>Admin screen: pick a borrow/return request and preview / print the transaction slip.</summary>
+public class PrintFormatPage : PageBase
+{
+    ComboBox combo;
+    Panel preview;
+    BookRequest cur;
+
+    public PrintFormatPage(Shell shell) : base("Print Format", "Preview and print library transaction slips")
+    {
+        var sel = new Panel { Dock = DockStyle.Top, Height = 60, BackColor = Color.Transparent };
+        var lbl = Theme.Lbl("Select Request", 10, FontStyle.Bold);
+        lbl.Location = new Point(0, 8);
+        combo = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat,
+            BackColor = Theme.Input, ForeColor = Theme.Ink, Font = Theme.F(9),
+            Location = new Point(110, 6), Width = 380
+        };
+        combo.SelectedIndexChanged += (s, e) => LoadSlip();
+        var print = Theme.Btn("Print", Theme.Brown, Color.White, 110, 32);
+        print.Location = new Point(510, 5);
+        print.Click += (s, e) => DoPrint();
+        sel.Controls.Add(lbl);
+        sel.Controls.Add(combo);
+        sel.Controls.Add(print);
+        Body.Controls.Add(sel);
+
+        preview = new Panel { Dock = DockStyle.Fill, BackColor = Color.White };
+        preview.Paint += (s, e) => PaintSlip(e);
+        Body.Controls.Add(preview);
+
+        RefreshCombo();
+    }
+
+    void RefreshCombo()
+    {
+        combo.Items.Clear();
+        foreach (var r in AppData.Requests)
+            combo.Items.Add($"{r.Id} · {(r.Type == "Borrow" ? "Borrow" : "Return")} · {r.Student?.Name} → {r.Book?.Title}");
+        if (combo.Items.Count > 0) combo.SelectedIndex = 0;
+    }
+
+    void LoadSlip()
+    {
+        cur = combo.SelectedItem == null ? null : AppData.Requests.FirstOrDefault(r => r.Id == combo.SelectedItem.ToString());
+        preview.Invalidate();
+    }
+
+    void PaintSlip(PaintEventArgs e)
+    {
+        using var bmp = RenderSlip(cur);
+        float scale = Math.Min(preview.Width / (float)bmp.Width, preview.Height / (float)bmp.Height);
+        float w = bmp.Width * scale;
+        float h = bmp.Height * scale;
+        e.Graphics.DrawImage(bmp, (preview.Width - w) / 2f, (preview.Height - h) / 2f, w, h);
+    }
+
+    void DoPrint()
+    {
+        if (cur == null) { MessageBox.Show("Please select a request to print.", "Print Format"); return; }
+        var pd = new PrintDocument();
+        pd.PrintPage += (s, e) =>
+        {
+            using var bmp = RenderSlip(cur);
+            float scale = Math.Min(pd.DefaultPageSettings.PaperSize.Width / bmp.Width, pd.DefaultPageSettings.PaperSize.Height / bmp.Height);
+            float w = bmp.Width * scale;
+            float h = bmp.Height * scale;
+            e.Graphics.DrawImage(bmp, (pd.DefaultPageSettings.PaperSize.Width - w) / 2f, (pd.DefaultPageSettings.PaperSize.Height - h) / 2f, w, h);
+            e.HasMorePages = false;
+        };
+        var dlg = new PrintPreviewDialog { Document = pd, Owner = FindForm() };
+        dlg.ShowDialog();
+    }
+
+    static Bitmap RenderSlip(BookRequest r)
+    {
+        var bmp = new Bitmap(600, 800);
+        using var g = Graphics.FromImage(bmp);
+        g.Clear(Color.White);
+
+        var type = r?.Type == "Return" ? "Return" : "Borrow";
+        var title = r?.Book?.Title ?? "—";
+        var author = r?.Book?.Author ?? "—";
+        var isbn = r?.Book?.Isbn ?? "—";
+        var cat = r?.Book?.Category ?? "—";
+        var stName = r?.Student?.Name ?? "—";
+        var stId = r?.Student?.Id ?? "—";
+        var stEmail = r?.Student?.Email ?? "—";
+        var status = r?.Status ?? "Pending";
+
+        float y = 26;
+        DrawText(g, "Library Inventory System", new Font("Segoe UI", 22, FontStyle.Bold), Theme.Ink, 40, y, 520); y += 30;
+        DrawText(g, type == "Borrow" ? "OFFICIAL BORROW REQUEST SLIP" : "OFFICIAL RETURN REQUEST SLIP", new Font("Segoe UI", 10, FontStyle.Bold), Theme.Muted, 40, y, 520); y += 26;
+        using (var pen = new Pen(Theme.Border)) { g.DrawLine(pen, 40, y, 560, y); }
+        y += 34;
+
+        DrawText(g, "BOOK", new Font("Segoe UI", 11, FontStyle.Bold), Theme.Brown, 40, y, 520); y += 30;
+        DrawText(g, $"Title: {title}", new Font("Segoe UI", 10, FontStyle.Bold), Theme.Ink, 40, y, 520); y += 16;
+        DrawText(g, $"Author: {author}", new Font("Segoe UI", 10, FontStyle.Regular), Theme.Ink, 40, y, 520); y += 16;
+        DrawText(g, $"ISBN: {isbn}", new Font("Segoe UI", 10, FontStyle.Regular), Theme.Ink, 40, y, 520); y += 16;
+        DrawText(g, $"Category: {cat}", new Font("Segoe UI", 10, FontStyle.Regular), Theme.Ink, 40, y, 520); y += 24;
+
+        DrawText(g, "STUDENT", new Font("Segoe UI", 11, FontStyle.Bold), Theme.Brown, 40, y, 520); y += 30;
+        DrawText(g, $"Name: {stName}", new Font("Segoe UI", 10, FontStyle.Bold), Theme.Ink, 40, y, 520); y += 16;
+        DrawText(g, $"Student ID: {stId}", new Font("Segoe UI", 10, FontStyle.Regular), Theme.Ink, 40, y, 520); y += 16;
+        DrawText(g, $"Email: {stEmail}", new Font("Segoe UI", 10, FontStyle.Regular), Theme.Ink, 40, y, 520); y += 24;
+
+        DrawText(g, "TRANSACTION", new Font("Segoe UI", 11, FontStyle.Bold), Theme.Brown, 40, y, 520); y += 30;
+        DrawText(g, $"Type: {type} Request", new Font("Segoe UI", 10, FontStyle.Bold), Theme.Ink, 40, y, 520); y += 16;
+        DrawText(g, $"Request ID: {r?.Id ?? "—"}", new Font("Segoe UI", 10, FontStyle.Regular), Theme.Ink, 40, y, 520); y += 16;
+        DrawText(g, $"Request Date: {r?.Date.ToString("MMM dd, yyyy hh:mm tt")}", new Font("Segoe UI", 10, FontStyle.Regular), Theme.Ink, 40, y, 520); y += 16;
+        DrawText(g, $"Status: {status}", new Font("Segoe UI", 10, FontStyle.Bold), Theme.Ink, 40, y, 520); y += 26;
+
+        float by = 724;
+        var rnd = new Random(2025);
+        float bx = 40;
+        using (var br = new SolidBrush(Color.Black))
+        {
+            while (bx < 540)
+            {
+                float wdt = rnd.Next(2, 6);
+                float hgt = rnd.Next(24, 46);
+                g.FillRectangle(br, bx, by, wdt, hgt);
+                bx += wdt + rnd.Next(1, 5);
+            }
+        }
+        DrawText(g, "Library Inventory System", new Font("Segoe UI", 9, FontStyle.Bold), Theme.Muted, 40, 762, 520);
+
+        return bmp;
+    }
+
+    static void DrawText(Graphics g, string text, Font f, Color c, float x, float y, float maxWidth)
+    {
+        if (string.IsNullOrWhiteSpace(text)) text = "—";
+        var sf = new StringFormat { Alignment = StringAlignment.Near };
+        using var br = new SolidBrush(c);
+        float h = g.MeasureString(text, f, new SizeF(maxWidth, float.MaxValue), sf).Height;
+        g.DrawString(text, f, br, new RectangleF(x, y, maxWidth, h), sf);
     }
 }

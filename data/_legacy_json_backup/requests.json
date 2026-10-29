@@ -106,5 +106,41 @@
     "BookCoverPath": "",
     "Date": "2026-10-28T21:14:15.3399499+08:00",
     "Status": "Approved"
+  },
+  {
+    "Id": "BR-2026-0010",
+    "Type": "Borrow",
+    "StudentId": "20251362-C",
+    "StudentName": "rengie lago",
+    "BookTitle": "The Alchemist",
+    "BookAuthor": "Paulo Coelho",
+    "BookIsbn": "9780062315007",
+    "BookCoverPath": "",
+    "Date": "2026-10-28T22:40:50.4002761+08:00",
+    "Status": "Approved"
+  },
+  {
+    "Id": "BR-2026-0011",
+    "Type": "Borrow",
+    "StudentId": "20251362-C",
+    "StudentName": "rengie lago",
+    "BookTitle": "To Kill a Mockingbird",
+    "BookAuthor": "Harper Lee",
+    "BookIsbn": "9780060935467",
+    "BookCoverPath": "",
+    "Date": "2026-10-28T22:40:50.4003259+08:00",
+    "Status": "Pending"
+  },
+  {
+    "Id": "BR-2026-0012",
+    "Type": "Borrow",
+    "StudentId": "20251362-C",
+    "StudentName": "rengie lago",
+    "BookTitle": "1984",
+    "BookAuthor": "George Orwell",
+    "BookIsbn": "9780451524935",
+    "BookCoverPath": "",
+    "Date": "2026-10-28T22:40:50.4003283+08:00",
+    "Status": "Pending"
   }
 ]

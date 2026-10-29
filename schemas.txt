@@ -1,0 +1,32 @@
+||  users  ||
+students:
+    student-id - primary key varchar
+    full name - varchar
+    program - varchar
+    year & section - varchar 
+    book cart = Array<book> ["UCC - 0000001", "UCC - 0000002"]
+    book history
+                {
+                    title: "book title",
+                    author: "book author",
+                    isbn: "book isbn",
+                    borrowed_date: "mm/dd/yyyy",
+                    return_date: "mm/dd/yyyy",
+                    remarks: "on-time/late"
+                }
+    role - student/member
+    status - active/suspended 
+    date of registration - cur_date
+
+|| end of users ||
+
+books:
+    salted id - primary key auto_increment "UCC - 000000x"
+    title - varchar 
+    author - varchar 
+    isbn - varchar
+    category - varchar 
+    total_copies - int 
+    borrowed_copies - int 
+    available_copies = total_copies - borrowed_copies
+    image - varchar (image name)

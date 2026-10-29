@@ -1,6 +1,6 @@
 # Library Inventory System (C# WinForms)
 
-Desktop recreation of the Library Inventory System screenshots. Pure C# / WinForms (.NET 8), no database or backend; all data is in memory and resets when the app closes.
+Desktop recreation of the Library Inventory System screenshots. Pure C# / WinForms (.NET 8) with a MySQL database (MySqlConnector); all data is persisted in MySQL and a one-time migration moves the legacy JSON data into it.
 
 ## Run
 Requires the .NET 8 SDK on **Windows**.
@@ -19,7 +19,7 @@ dotnet run
 - Log in / Sign up (placeholder validation only), sidebar navigation, Log Out
 - Browse by category (ALL/CIR/FIC/FIL/REF), search, add up to 3 books to the cart with the `+` button
 - Book Cart: remove, select, submit borrow request; Manage tab shows loans, click RETURN to return a book
-- Admin: approve/decline requests (dashboard and Requests page), add/edit/delete books and students, filters and search
+- Admin: approve/decline requests (dashboard and Requests page), add/edit/delete books and students, filters and search, Print Format (preview/print transaction slips)
 - Manage Account: Edit Profile toggle; click the Account Status chip to switch between the Active and Suspended designs
 
 ## Files

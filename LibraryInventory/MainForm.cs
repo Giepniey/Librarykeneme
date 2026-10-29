@@ -95,26 +95,59 @@ public class AuthPage : BackdropPanel
 
         go.Click += (s, e) =>
         {
-            string name = user.Box.Text.Trim();
-            if (name.Length == 0 || pass.Box.Text.Length == 0)
+            try
             {
-                MessageBox.Show("Please fill in all fields.", "Library Inventory System");
-                return;
-            }
-            if (signup)
-            {
-                if (pass.Box.Text != confirm.Box.Text)
+                string name = user.Box.Text.Trim();
+                if (name.Length == 0 || pass.Box.Text.Length == 0)
                 {
-                    MessageBox.Show("Passwords do not match.", "Library Inventory System");
+                    MessageBox.Show("Please fill in all fields.", "Library Inventory System");
                     return;
                 }
-                MessageBox.Show("Account created (demo only - nothing is stored). You can now log in.", "Library Inventory System");
-                main.Navigate(new AuthPage(main, false));
-                return;
+                if (signup)
+                {
+                    if (pass.Box.Text != confirm.Box.Text)
+                    {
+                        MessageBox.Show("Passwords do not match.", "Library Inventory System");
+                        return;
+                    }
+                    MessageBox.Show("Account created (demo only - nothing is stored). You can now log in.", "Library Inventory System");
+                    main.Navigate(new AuthPage(main, false));
+                    return;
+                }
+                AppData.UserName = name;
+                var admin = Database.GetAdmin(name, pass.Box.Text);
+                if (admin != null)
+                {
+                    main.Navigate(new Shell(main, true));
+                }
+                else
+                {
+                    var student = Database.GetStudent(name, pass.Box.Text);
+                    if (student != null && student.Active)
+                    {
+                        AppData.Me = student;
+                        // Student assistants get the full admin workspace; regular students
+                        // get the student account screens.
+                        if (student.IsSa)
+                        {
+                            AppData.UserName = student.Name.Split(' ')[0];
+                            main.Navigate(new Shell(main, true));
+                        }
+                        else
+                        {
+                            main.Navigate(new Shell(main, false));
+                        }
+                    }
+                    else
+                    {
+                        MessageBox.Show("Invalid username or password.", "Library Inventory System");
+                    }
+                }
             }
-            AppData.UserName = name;
-            // Demo rule: the username "admin" opens the admin screens, anything else opens the student screens.
-            main.Navigate(new Shell(main, name.Equals("admin", StringComparison.OrdinalIgnoreCase)));
+            catch (Exception ex)
+            {
+                MessageBox.Show("Login error: " + ex.GetType().Name + ": " + ex.Message + Environment.NewLine + ex.StackTrace, "Library Inventory System", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         };
 
         stack.Controls.Add(logo);
