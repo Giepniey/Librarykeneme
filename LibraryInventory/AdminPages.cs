@@ -96,19 +96,9 @@ public class ManageBooksPage : PageBase
             if (col == "edit") EditBook(b);
             else if (col == "del" && MessageBox.Show($"Delete \"{b.Title}\"?", "Delete book", MessageBoxButtons.YesNo) == DialogResult.Yes)
             {
-                try
-                {
-                    Database.DeleteBook(b);
-                    AppData.Books.Remove(b);
-                    AppData.LoadCart();
-                    Reload();
-                }
-                catch (Exception ex) when (Database.IsReferenceBlocked(ex))
-                {
-                    MessageBox.Show(
-                        $"\"{b.Title}\" cannot be deleted because it is still linked to borrowing history or pending requests.",
-                        "Delete book", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                }
+                AppData.Books.Remove(b);
+                AppData.SyncState();
+                Reload();
             }
         };
 
@@ -162,15 +152,10 @@ public class ManageBooksPage : PageBase
         if (v == null) return;
         if (string.IsNullOrWhiteSpace(v[0]) || !int.TryParse(v[4], out int qty) || qty < 1) { MessageBox.Show("Please enter a title and a valid quantity.", "Add book"); return; }
         var b = new Book { Title = v[0].Trim(), Author = v[1].Trim(), Isbn = v[2].Trim(), Category = v[3], Qty = qty, CoverColor = Color.FromArgb(0x8A, 0x6E, 0x50) };
-        if (AppData.Books.Any(x => x.Isbn.Equals(b.Isbn, StringComparison.OrdinalIgnoreCase)))
-        {
-            MessageBox.Show($"A book with ISBN \"{b.Isbn}\" already exists.", "Add book");
-            return;
-        }
         if (zone?.CoverImage != null)
             b.CoverPath = Database.SaveCover(b, zone.CoverImage);
         AppData.Books.Add(b);
-        Database.SaveBook(b);
+        AppData.SyncState();
         Reload();
     }
 
@@ -180,24 +165,12 @@ public class ManageBooksPage : PageBase
             new Field("Title", b.Title), new Field("Author", b.Author), new Field("ISBN", b.Isbn), new Field("Category", b.Category, Cats), new Field("Quantity", b.Qty.ToString()));
         if (v == null) return;   // Cancel: leave the old cover untouched in dialog and table
         if (string.IsNullOrWhiteSpace(v[0]) || !int.TryParse(v[4], out int qty) || qty < b.Out) { MessageBox.Show("Please enter a title and a quantity that covers the borrowed copies.", "Edit book"); return; }
-        string newIsbn = v[2].Trim();
-        if (AppData.Books.Any(x => x != b && x.Isbn.Equals(newIsbn, StringComparison.OrdinalIgnoreCase)))
-        {
-            MessageBox.Show($"A book with ISBN \"{newIsbn}\" already exists.", "Edit book");
-            return;
-        }
-        string previousIsbn = b.Isbn;
-        b.Title = v[0].Trim(); b.Author = v[1].Trim(); b.Isbn = newIsbn; b.Category = v[3]; b.Qty = qty;
-        // Persist the row first so cover updates below target the (possibly renamed) ISBN.
-        Database.SaveBook(b, previousIsbn);
+        b.Title = v[0].Trim(); b.Author = v[1].Trim(); b.Isbn = v[2].Trim(); b.Category = v[3]; b.Qty = qty;
         if (zone?.Cleared == true)
-        {
-            Database.DeleteCover(b);          // removes file + database entry
-            b.CoverPath = "";
-        }
+            Database.DeleteCover(b);          // removes file + database entry, clears CoverPath
         else if (zone?.Changed == true && zone.CoverImage != null)
             b.CoverPath = Database.SaveCover(b, zone.CoverImage);
-        Database.SaveBook(b);
+        AppData.SyncState();
         Reload();   // refresh the books table so the new (or removed) cover shows right away
     }
 }
@@ -245,21 +218,12 @@ public class ManageStudentsPage : PageBase
                     break;
                 case "edit": Edit(st); break;
                 case "del":
-                    if (st == AppData.Me) { MessageBox.Show("The signed-in student cannot be deleted.", "Delete student"); break; }
+                    if (st == AppData.Me) { MessageBox.Show("The signed-in sample student cannot be deleted.", "Delete student"); break; }
                     if (MessageBox.Show($"Delete {st.Name}?", "Delete student", MessageBoxButtons.YesNo) == DialogResult.Yes)
                     {
-                        try
-                        {
-                            Database.DeleteStudent(st);
-                            AppData.Students.Remove(st);
-                            Reload();
-                        }
-                        catch (Exception ex) when (Database.IsReferenceBlocked(ex))
-                        {
-                            MessageBox.Show(
-                                $"{st.Name} cannot be deleted because they still have loans, requests, or borrowing history.",
-                                "Delete student", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        }
+                        AppData.Students.Remove(st);
+                        Database.SaveStudents(AppData.Students);
+                        Reload();
                     }
                     break;
             }
@@ -323,11 +287,6 @@ public class ManageStudentsPage : PageBase
         string prevId = st?.Id;
         st ??= new Student { Joined = DateTime.Today };
         st.Id = v[0].Trim(); st.Name = v[1].Trim(); st.Email = v[2].Trim(); st.IsSa = v[3] == "Student Assistant"; st.Course = v[4]; st.Year = v[5]; st.Active = v[6] == "Active";
-        if (isNew && AppData.Students.Any(s => s.Id.Equals(st.Id, StringComparison.OrdinalIgnoreCase)))
-        {
-            MessageBox.Show($"A student with ID {st.Id} already exists.", "Student");
-            return;
-        }
         if (isNew) AppData.Students.Add(st);
         Database.SaveStudent(st, prevId);
         Reload();

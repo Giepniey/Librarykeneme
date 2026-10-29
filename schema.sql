@@ -1,0 +1,76 @@
+-- Library Inventory System - MySQL database schema
+-- Database: LIS
+
+CREATE DATABASE IF NOT EXISTS LIS;
+USE LIS;
+
+CREATE TABLE IF NOT EXISTS students (
+    student_id VARCHAR(20) PRIMARY KEY,
+    full_name VARCHAR(140) NOT NULL,
+    email VARCHAR(160) NOT NULL,
+    password VARCHAR(120) NOT NULL,
+    program VARCHAR(60) NOT NULL,
+    year VARCHAR(10) NOT NULL,
+    section VARCHAR(8) NOT NULL,
+    contact VARCHAR(20) NOT NULL,
+    status TINYINT(1) NOT NULL DEFAULT 1,
+    joined DATE NOT NULL,
+    avatar_path VARCHAR(260) NOT NULL DEFAULT '',
+    role VARCHAR(20) NOT NULL DEFAULT 'student',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS books (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    isbn VARCHAR(40) NOT NULL UNIQUE,
+    title VARCHAR(200) NOT NULL,
+    author VARCHAR(160) NOT NULL,
+    category VARCHAR(8) NOT NULL,
+    total_copies INT NOT NULL DEFAULT 1,
+    borrowed_copies INT NOT NULL DEFAULT 0,
+    cover_path VARCHAR(260) NOT NULL DEFAULT '',
+    cover_color VARCHAR(20) NOT NULL DEFAULT '',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS loans (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    book_id INT NOT NULL,
+    student_id VARCHAR(20) NOT NULL,
+    borrowed_date DATETIME NOT NULL,
+    due_date DATETIME NOT NULL,
+    status VARCHAR(12) NOT NULL DEFAULT 'PENDING',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS book_requests (
+    id VARCHAR(40) PRIMARY KEY,
+    type VARCHAR(10) NOT NULL,
+    book_id INT NOT NULL,
+    student_id VARCHAR(20) NOT NULL,
+    student_name VARCHAR(140) NOT NULL DEFAULT '',
+    book_title VARCHAR(200) NOT NULL DEFAULT '',
+    book_author VARCHAR(160) NOT NULL DEFAULT '',
+    book_isbn VARCHAR(40) NOT NULL DEFAULT '',
+    book_cover_path VARCHAR(260) NOT NULL DEFAULT '',
+    request_date DATETIME NOT NULL,
+    status VARCHAR(12) NOT NULL DEFAULT 'Pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS history (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    book_id INT NOT NULL,
+    student_id VARCHAR(20) NOT NULL,
+    borrowed_date DATETIME NOT NULL,
+    returned_date DATETIME NOT NULL,
+    remark VARCHAR(20) NOT NULL DEFAULT 'On time',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS admins (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(60) UNIQUE NOT NULL,
+    password VARCHAR(120) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;

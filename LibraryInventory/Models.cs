@@ -2,7 +2,6 @@ namespace LibraryInventory;
 
 public class Book
 {
-    public int Id { get; set; }
     public string Title { get; set; } = "";
     public string Author { get; set; } = "";
     public string Isbn { get; set; } = "";
@@ -20,7 +19,6 @@ public class Student
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
     public string Email { get; set; } = "";
-    /// <summary>Plain text only in memory (never persisted); empty after a bulk load.</summary>
     public string Password { get; set; } = "";
     public string Program { get; set; } = "";
     public string Section { get; set; } = "";
@@ -38,7 +36,6 @@ public class Student
 
 public class Loan
 {
-    public int Id { get; set; }
     public Book Book { get; set; }
     public string StudentId { get; set; } = "";
     public DateTime Borrowed { get; set; }
@@ -48,7 +45,6 @@ public class Loan
 
 public class HistoryEntry
 {
-    public int Id { get; set; }
     public Book Book { get; set; }
     public string StudentId { get; set; } = "";
     public DateTime Borrowed { get; set; }
@@ -67,7 +63,7 @@ public class BookRequest
     public Loan Loan { get; set; }
 }
 
-/// <summary>In-memory view of the database plus the borrowing business rules.</summary>
+/// <summary>In-memory sample data and tiny bits of business logic (no database).</summary>
 public static class AppData
 {
     public static readonly List<Book> Books = new();
@@ -103,165 +99,14 @@ public static class AppData
         _ => c
     };
 
-    static bool _initialized;
-
-    /// <summary>
-    /// The exception that stopped <see cref="Initialize"/> from loading the data,
-    /// or null when initialisation succeeded.
-    /// </summary>
-    public static Exception InitError { get; private set; }
-
-    /// <summary>
-    /// Loads all database-backed state exactly once. Returns false and stores the
-    /// failure in <see cref="InitError"/> instead of throwing from a static
-    /// constructor (which surfaces as a useless TypeInitializationException).
-    /// Calling it again after a failure retries the whole load.
-    /// </summary>
-    public static bool Initialize()
-    {
-        if (_initialized) return true;
-
-        try
-        {
-            InitializeCore();
-            _initialized = true;
-            InitError = null;
-            return true;
-        }
-        catch (Exception ex)
-        {
-            InitError = ex;
-            return false;
-        }
-    }
-
-    static void InitializeCore()
-    {
-        // Start clean so a retry after a failure never duplicates rows.
-        Books.Clear();
-        Students.Clear();
-        Loans.Clear();
-        History.Clear();
-        Requests.Clear();
-        Cart.Clear();
-        Me = null;
-
-        // Connects and verifies that database/00_install.sql has been run.
-        Database.Initialize();
-
-        Books.AddRange(Database.LoadBooks());
-        Students.AddRange(Database.LoadStudents());
-
-        var byIsbn = Books.Where(b => !string.IsNullOrEmpty(b.Isbn))
-                          .GroupBy(b => b.Isbn).ToDictionary(g => g.Key, g => g.First());
-
-        foreach (var rec in Database.LoadRequests())
-        {
-            var student = Students.FirstOrDefault(s => s.Id == rec.StudentId);
-            if (student == null) continue;
-            if (!byIsbn.TryGetValue(rec.BookIsbn, out var book)) continue;
-
-            Requests.Add(new BookRequest
-            {
-                Id = rec.Id,
-                Type = string.IsNullOrEmpty(rec.Type) ? "Borrow" : rec.Type,
-                Student = student,
-                Book = book,
-                Date = rec.Date,
-                Status = rec.Status
-            });
-        }
-
-        Loans.AddRange(Database.LoadLoans(byIsbn));
-        History.AddRange(Database.LoadHistory(byIsbn));
-
-        // Point pending requests at the loan created when they were submitted.
-        foreach (var r in Requests.Where(r => r.Type == "Borrow" && r.Status == "Pending"))
-            r.Loan = Loans.FirstOrDefault(l => l.Book == r.Book &&
-                                               l.StudentId == (r.Student?.Id ?? "") &&
-                                               l.Status == "PENDING");
-
-        Me = Students.FirstOrDefault();
-        RefreshUserFlags();
-    }
-
-    /// <summary>Switches the signed-in student and restores their persisted cart.</summary>
-    public static void SignIn(Student student)
-    {
-        Me = student;
-        if (student != null)
-        {
-            int index = Students.FindIndex(s => s.Id == student.Id);
-            if (index >= 0) Students[index] = student;
-            else Students.Add(student);
-
-            foreach (var r in Requests)
-                if (r.Student?.Id == student.Id) r.Student = student;
-        }
-        RefreshUserFlags();
-        LoadCart();
-    }
-
-    public static void SignOut()
-    {
-        Me = null;
-        UserName = "user";
-        Suspended = false;
-        Cart.Clear();
-        RaiseCartChanged();
-    }
-
-    static void RefreshUserFlags()
-    {
-        if (Me == null)
-        {
-            UserName = "user";
-            Suspended = false;
-            return;
-        }
-
-        UserName = string.IsNullOrWhiteSpace(Me.Name) ? Me.Id : Me.Name.Split(' ')[0];
-        Suspended = !Me.Active;
-    }
-
-    /// <summary>Reloads the cart for the current student from cart_items.</summary>
-    public static void LoadCart()
-    {
-        Cart.Clear();
-        if (Me != null)
-        {
-            foreach (var isbn in Database.LoadCartIsbns(Me.Id))
-            {
-                var book = Books.FirstOrDefault(b => b.Isbn == isbn);
-                if (book != null && !Cart.Contains(book)) Cart.Add(book);
-            }
-        }
-        RaiseCartChanged();
-    }
-
-    public static void AddToCart(Book book)
-    {
-        if (book == null || Me == null) return;
-        Database.AddToCart(Me.Id, book);
-        if (!Cart.Contains(book)) Cart.Add(book);
-        RaiseCartChanged();
-    }
-
-    public static void RemoveFromCart(Book book)
-    {
-        if (book == null) return;
-        if (Me != null) Database.RemoveFromCart(Me.Id, book);
-        Cart.Remove(book);
-        RaiseCartChanged();
-    }
-
     public static bool Approve(BookRequest r)
     {
         if (r.Book != null && !r.Book.Available && r.Type == "Borrow") return false;
         r.Status = "Approved";
         if (r.Type == "Borrow" && r.Book != null)
         {
-            // Reuse the pending loan created when the student submitted the request.
+            // Reuse the pending loan created when the student submitted the request
+            // (it survives reloads now that loans are persisted).
             r.Loan ??= Loans.FirstOrDefault(l => l.Book == r.Book && l.StudentId == (r.Student?.Id ?? "") && l.Status != "RETURN");
             r.Loan ??= new Loan { Book = r.Book, StudentId = r.Student?.Id ?? "" };
             r.Loan.Status = "RETURN";   // approved, currently borrowed
@@ -301,9 +146,11 @@ public static class AppData
         SyncState();
     }
 
-    /// <summary>Persists the pieces that the borrow/return flow touches, in dependency order.</summary>
+    /// <summary>Persists every state that the borrow/return flow touches, in dependency order.</summary>
     public static void SyncState()
     {
+        // Books first: rewriting the books table changes book ids, and
+        // requests/loans/history rows reference books by id.
         Database.SaveBooks(Books);
         SaveRequestsToDb();
         Database.SaveLoans(Loans);
@@ -317,7 +164,11 @@ public static class AppData
             Id = r.Id,
             Type = r.Type,
             StudentId = r.Student?.Id ?? "",
+            StudentName = r.Student?.Name ?? "",
+            BookTitle = r.Book?.Title ?? "",
+            BookAuthor = r.Book?.Author ?? "",
             BookIsbn = r.Book?.Isbn ?? "",
+            BookCoverPath = r.Book?.CoverPath ?? "",
             Date = r.Date,
             Status = r.Status
         }).ToList();
@@ -331,7 +182,7 @@ public static class AppData
         var open = History.FirstOrDefault(h =>
             h.Remark == "Approved" && h.StudentId == l.StudentId &&
             h.Book != null && l.Book != null &&
-            (h.Book.Isbn == l.Book.Isbn || h.Book.Title == l.Book.Title));
+            (h.Book.Isbn == l.Book.Isbn || h.Book.Title == l.Book?.Title));
         if (open != null)
         {
             open.Returned = DateTime.Today;
@@ -346,21 +197,20 @@ public static class AppData
             });
         }
         Loans.Remove(l);
-        if (l.Book != null) l.Book.Out = Math.Max(0, l.Book.Out - 1);
+        l.Book.Out = Math.Max(0, l.Book.Out - 1);
         SyncState();
     }
 
     public static void SubmitCart(IEnumerable<Book> books)
     {
-        if (Me == null) return;
-
+        int nextNum = Requests.Count + 1;
         foreach (var b in books.ToList())
         {
             var loan = new Loan { Book = b, StudentId = Me.Id, Status = "PENDING", Borrowed = DateTime.Today, Due = DateTime.Today.AddDays(7) };
             Loans.Add(loan);
             Requests.Add(new BookRequest
             {
-                Id = NextRequestId(),
+                Id = $"BR-{DateTime.Today.Year}-{nextNum++:D4}",
                 Type = "Borrow",
                 Book = b,
                 Student = Me,
@@ -369,23 +219,115 @@ public static class AppData
                 Loan = loan
             });
             Cart.Remove(b);
-            Database.RemoveFromCart(Me.Id, b);
         }
         SyncState();
         RaiseCartChanged();
     }
 
-    static string NextRequestId()
+    static AppData()
     {
-        int year = DateTime.Today.Year;
-        int next = 1;
+        // Load students from database
+        var dbStudents = Database.LoadStudents();
+        Students.AddRange(dbStudents);
+
+        // Load requests from database
+        var dbRequests = Database.LoadRequests();
+        foreach (var rec in dbRequests)
+        {
+            var st = Students.FirstOrDefault(s => s.Id == rec.StudentId);
+            if (st == null)
+            {
+                st = new Student
+                {
+                    Id = rec.StudentId,
+                    Name = rec.StudentName,
+                    Email = $"{rec.StudentId.ToLowerInvariant().Replace("-", "")}@library.edu",
+                    Year = "2nd Year",
+                    Course = "BS Computer Science"
+                };
+                Students.Add(st);
+            }
+
+            var bk = Books.FirstOrDefault(b => b.Title.Equals(rec.BookTitle, StringComparison.OrdinalIgnoreCase) ||
+                                               (!string.IsNullOrEmpty(rec.BookIsbn) && b.Isbn == rec.BookIsbn));
+            if (bk == null)
+            {
+                bk = new Book
+                {
+                    Title = rec.BookTitle,
+                    Author = rec.BookAuthor,
+                    Isbn = rec.BookIsbn,
+                    CoverPath = rec.BookCoverPath,
+                    CoverColor = Color.FromArgb(0x8A, 0x6E, 0x50),
+                    Qty = 8,
+                    Out = 2
+                };
+                Books.Add(bk);
+            }
+
+            var req = new BookRequest
+            {
+                Id = rec.Id,
+                Type = string.IsNullOrEmpty(rec.Type) ? "Borrow" : rec.Type,
+                Student = st,
+                Book = bk,
+                Date = rec.Date,
+                Status = rec.Status
+            };
+            Requests.Add(req);
+        }
+
+        // Re-attach saved book covers (ISBN → file path, persisted in data/covers.json)
+        foreach (var (isbn, path) in Database.LoadCoverMap())
+        {
+            var b = Books.FirstOrDefault(x => x.Isbn == isbn);
+            if (b != null && File.Exists(path)) b.CoverPath = path;
+        }
+
+        // Load books from database
+        Books.Clear();
+        Books.AddRange(Database.LoadBooks());
+
+        // Re-link request book references to the freshly loaded book objects
+        // (they pointed at temporary objects from before/books that were replaced above).
+        var byIsbn = Books.Where(b => !string.IsNullOrEmpty(b.Isbn))
+                          .GroupBy(b => b.Isbn).ToDictionary(g => g.Key, g => g.First());
         foreach (var r in Requests)
         {
-            var parts = (r.Id ?? "").Split('-');
-            if (parts.Length >= 3 && parts[1] == year.ToString() && int.TryParse(parts[2], out int n))
-                next = Math.Max(next, n + 1);
+            if (r.Book == null) continue;
+            var match = !string.IsNullOrEmpty(r.Book.Isbn) && byIsbn.TryGetValue(r.Book.Isbn, out var m1) ? m1
+                      : Books.FirstOrDefault(b => b.Title.Equals(r.Book.Title, StringComparison.OrdinalIgnoreCase));
+            if (match != null) r.Book = match;
         }
-        return $"BR-{year}-{next:D4}";
+
+        // Restore active loans (so approved requests show in the student's Manage tab) and history.
+        foreach (var l in Database.LoadLoans(byIsbn))
+            if (!Loans.Any(x => x.Book == l.Book && x.StudentId == l.StudentId && x.Status == l.Status))
+                Loans.Add(l);
+        History.AddRange(Database.LoadHistory(byIsbn));
+
+        // If no students exist, create a sample one
+        if (Students.Count == 0)
+        {
+            Me = new Student
+            {
+                Id = "20251362-C",
+                Name = "Sample Student",
+                Email = "student@library.edu",
+                Password = "password123",
+                Program = "BS Computer Science",
+                Year = "1",
+                Section = "A",
+                Contact = "09123456789",
+                Joined = DateTime.Today
+            };
+            Students.Add(Me);
+            Database.SaveStudent(Me);
+        }
+        else
+        {
+            Me = Students[0];
+        }
     }
 }
 
@@ -394,6 +336,5 @@ public class Admin
 {
     public int Id { get; set; }
     public string Username { get; set; } = "";
-    /// <summary>Never populated: passwords live only as BCrypt hashes in the database.</summary>
     public string Password { get; set; } = "";
 }

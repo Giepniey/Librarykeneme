@@ -103,17 +103,6 @@ public class AuthPage : BackdropPanel
                     MessageBox.Show("Please fill in all fields.", "Library Inventory System");
                     return;
                 }
-
-                if (!AppData.Initialize())
-                {
-                    MessageBox.Show(
-                        "Could not load the library database." + Environment.NewLine + Environment.NewLine +
-                        (AppData.InitError?.ToString() ?? "Unknown error") + Environment.NewLine + Environment.NewLine +
-                        "Run database/00_install.sql from the repository root, then try again.",
-                        "Library Inventory System", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
-
                 if (signup)
                 {
                     if (pass.Box.Text != confirm.Box.Text)
@@ -121,48 +110,10 @@ public class AuthPage : BackdropPanel
                         MessageBox.Show("Passwords do not match.", "Library Inventory System");
                         return;
                     }
-
-                    var idCheck = Validator.ValidateStudentId(name);
-                    if (!idCheck.valid)
-                    {
-                        MessageBox.Show(idCheck.error, "Library Inventory System");
-                        return;
-                    }
-
-                    var passwordCheck = Validator.ValidatePassword(pass.Box.Text);
-                    if (!passwordCheck.valid)
-                    {
-                        MessageBox.Show(passwordCheck.error, "Library Inventory System");
-                        return;
-                    }
-
-                    string studentId = Validator.NormalizeStudentId(name);
-                    if (Database.StudentExists(studentId))
-                    {
-                        MessageBox.Show("An account with this Student ID already exists.", "Library Inventory System");
-                        return;
-                    }
-
-                    var created = new Student
-                    {
-                        Id = studentId,
-                        Name = $"Student {studentId}",
-                        Email = $"{studentId.ToLowerInvariant().Replace("-", "")}@library.edu",
-                        Password = pass.Box.Text,
-                        Program = "BS Computer Science",
-                        Year = "1",
-                        Section = "A",
-                        Contact = "",
-                        Joined = DateTime.Today,
-                        Active = true
-                    };
-                    Database.SaveStudent(created);
-
-                    MessageBox.Show("Account created. You can now log in.", "Library Inventory System");
+                    MessageBox.Show("Account created (demo only - nothing is stored). You can now log in.", "Library Inventory System");
                     main.Navigate(new AuthPage(main, false));
                     return;
                 }
-
                 AppData.UserName = name;
                 var admin = Database.GetAdmin(name, pass.Box.Text);
                 if (admin != null)
@@ -174,18 +125,18 @@ public class AuthPage : BackdropPanel
                     var student = Database.GetStudent(name, pass.Box.Text);
                     if (student != null && student.Active)
                     {
-                        AppData.SignIn(student);
-
+                        AppData.Me = student;
                         // Student assistants get the full admin workspace; regular students
                         // get the student account screens.
                         if (student.IsSa)
+                        {
+                            AppData.UserName = student.Name.Split(' ')[0];
                             main.Navigate(new Shell(main, true));
+                        }
                         else
+                        {
                             main.Navigate(new Shell(main, false));
-                    }
-                    else if (student != null)
-                    {
-                        MessageBox.Show("Your account is suspended. Please contact the librarian.", "Library Inventory System");
+                        }
                     }
                     else
                     {
@@ -195,9 +146,7 @@ public class AuthPage : BackdropPanel
             }
             catch (Exception ex)
             {
-                // Include the InnerException: that is where the real database error lives.
-                string detail = ex.InnerException != null ? Environment.NewLine + ex.InnerException.Message : "";
-                MessageBox.Show("Login error: " + ex.Message + detail, "Library Inventory System", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Login error: " + ex.GetType().Name + ": " + ex.Message + Environment.NewLine + ex.StackTrace, "Library Inventory System", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         };
 
