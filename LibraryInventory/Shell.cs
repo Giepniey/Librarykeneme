@@ -61,7 +61,7 @@ public class Shell : Panel
             e.Graphics.DrawLine(p, 14, 6, 202, 6);
         };
         var logout = new NavItem("➜", "Log Out", "logout") { Location = new Point(0, 18) };
-        logout.Click += (s, e) => main.Navigate(new AuthPage(main, false));
+        logout.Click += (s, e) => { AppData.SignOut(); main.Navigate(new AuthPage(main, false)); };
         bottom.Controls.Add(logout);
         sidebar.Controls.Add(bottom);
 

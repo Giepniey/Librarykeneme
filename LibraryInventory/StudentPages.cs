@@ -59,8 +59,7 @@ public class BrowseBooksPage : PageBase
         if (!b.Available) { MessageBox.Show("This book is currently borrowed.", "Not available"); return; }
         if (AppData.Cart.Contains(b)) { MessageBox.Show("This book is already in your cart.", "Book Cart"); return; }
         if (AppData.Cart.Count >= 3) { MessageBox.Show("You can only select a maximum of 3 books.", "Book Cart"); return; }
-        AppData.Cart.Add(b);
-        AppData.RaiseCartChanged();
+        AppData.AddToCart(b);
     }
 }
 
@@ -140,7 +139,7 @@ public class BookCartPage : PageBase
             var chip = new Label { Text = "Available", Font = Theme.F(8, FontStyle.Bold), ForeColor = Color.White, BackColor = Color.FromArgb(0x3F, 0x9E, 0x4A), AutoSize = false, Size = new Size(70, 18), TextAlign = ContentAlignment.MiddleCenter, Location = new Point(104, 86) };
             var trash = new Button { Text = "🗑", Font = Theme.E(14), FlatStyle = FlatStyle.Flat, Size = new Size(40, 36), Cursor = Cursors.Hand, ForeColor = Theme.Ink, BackColor = Color.Transparent };
             trash.FlatAppearance.BorderSize = 0;
-            trash.Click += (s, e) => { AppData.Cart.Remove(b); AppData.RaiseCartChanged(); ShowTab(false); };
+            trash.Click += (s, e) => { AppData.RemoveFromCart(b); ShowTab(false); };
             row.Controls.AddRange(new Control[] { chk, pic, t, a, c, i, chip, trash });
             row.Resize += (s, e) => trash.Location = new Point(row.Width - trash.Width - 8, 36);
             list.Controls.Add(row);

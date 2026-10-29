@@ -1,3 +1,8 @@
+Library Inventory System - schema design notes
+================================================
+The executable schema lives in database/ (install with database/00_install.sql).
+This file is kept only as a record of the original design.
+
 ||  users  ||
 students:
     student-id - primary key varchar
