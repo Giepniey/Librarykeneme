@@ -574,6 +574,22 @@ public static class Database
         }
     }
 
+    public static void DeleteStudent(string id)
+    {
+        using var cmd = Db.Instance.Connection.CreateCommand();
+        cmd.CommandText = "DELETE FROM students WHERE student_id = @id";
+        cmd.Parameters.Add(new MySqlParameter("@id", id));
+        cmd.ExecuteNonQuery();
+    }
+
+    public static bool StudentExists(string id)
+    {
+        using var cmd = Db.Instance.Connection.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM students WHERE student_id = @id";
+        cmd.Parameters.Add(new MySqlParameter("@id", id));
+        return Convert.ToInt32(cmd.ExecuteScalar() ?? 0) > 0;
+    }
+
     public static Student GetStudent(string id, string password)
     {
         try

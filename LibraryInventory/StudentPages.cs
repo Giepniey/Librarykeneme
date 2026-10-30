@@ -178,10 +178,10 @@ public class BookCartPage : PageBase
         g.Columns.Add(Tables.Text("isbn", "ISBN", 100));
         g.Columns.Add(Tables.Text("borrowed", "Borrowed", 80));
         g.Columns.Add(Tables.Text("due", "Due Date", 80));
-        g.Columns.Add(Tables.SolidChip("action", "Action", 80));
+        g.Columns.Add(Tables.SolidChip("action", "Action", 110));
         foreach (var l in AppData.Loans.Where(x => x.StudentId == AppData.Me.Id))
         {
-            int i = g.Rows.Add(l.Book.Title, l.Book.Author, l.Book.Isbn, l.Borrowed.ToString("MM/dd/yyyy"), l.Due.ToString("MM/dd/yyyy"), l.Status == "RETURN" ? "APPROVED" : l.Status);
+            int i = g.Rows.Add(l.Book.Title, l.Book.Author, l.Book.Isbn, l.Borrowed.ToString("MM/dd/yyyy"), l.Due.ToString("MM/dd/yyyy"), l.Status == "RETURNING" ? "PENDING RETURN" : l.Status);
             g.Rows[i].Tag = l;
         }
         g.CellClick += (s, e) =>
@@ -189,8 +189,9 @@ public class BookCartPage : PageBase
             if (e.RowIndex < 0 || g.Columns[e.ColumnIndex].Name != "action") return;
             var l = (Loan)g.Rows[e.RowIndex].Tag;
             if (l.Status == "PENDING") { MessageBox.Show("Waiting for the librarian's approval.", "Pending"); return; }
-            if (MessageBox.Show($"Return \"{l.Book.Title}\"?", "Return book", MessageBoxButtons.YesNo) != DialogResult.Yes) return;
-            AppData.Return(l);
+            if (l.Status == "RETURNING") { MessageBox.Show("Your return request is waiting for the librarian's approval.", "Pending return"); return; }
+            if (MessageBox.Show($"Send a return request for \"{l.Book.Title}\"?", "Return book", MessageBoxButtons.YesNo) != DialogResult.Yes) return;
+            AppData.RequestReturn(l);
             ShowTab(true);
         };
         Tables.Fit(g);

@@ -110,7 +110,7 @@ public class AuthPage : BackdropPanel
                         MessageBox.Show("Passwords do not match.", "Library Inventory System");
                         return;
                     }
-                    if (Database.GetStudent(name, "") != null || AppData.Students.Any(x => x.Id.Equals(name, StringComparison.OrdinalIgnoreCase)))
+                    if (Database.StudentExists(name))
                     {
                         MessageBox.Show("That username already exists.", "Library Inventory System");
                         return;
@@ -118,6 +118,7 @@ public class AuthPage : BackdropPanel
                     var ns = new Student { Id = name, Name = name, Password = pass.Box.Text, Email = name + "@library.edu", Program = "-", Year = "-", Section = "-", Contact = "-", Joined = DateTime.Today };
                     Database.SaveStudent(ns);
                     ns.Password = Database.HashPassword(ns.Password);
+                    AppData.Students.RemoveAll(x => x.Id.Equals(name, StringComparison.OrdinalIgnoreCase));
                     AppData.Students.Add(ns);
                     MessageBox.Show("Account created and saved. You can now log in.", "Library Inventory System");
                     main.Navigate(new AuthPage(main, false));

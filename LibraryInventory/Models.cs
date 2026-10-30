@@ -144,12 +144,29 @@ public static class AppData
     public static void Decline(BookRequest r)
     {
         r.Status = "Rejected";
+        if (r.Type == "Return")
+        {
+            // Return refused: the student still has the book.
+            var rl = r.Loan ?? Loans.FirstOrDefault(l => l.Book == r.Book && l.StudentId == (r.Student?.Id ?? "") && l.Status == "RETURNING");
+            if (rl != null) rl.Status = "RETURN";
+        }
         if (r.Type == "Borrow")
         {
             // The loan link may be missing after a reload — find the pending loan instead.
             var loan = r.Loan ?? Loans.FirstOrDefault(l => l.Book == r.Book && l.StudentId == (r.Student?.Id ?? "") && l.Status == "PENDING");
             if (loan != null) Loans.Remove(loan);
         }
+
+        // The decision shows in the student's history (and the database) too.
+        if (r.Book != null)
+            History.Insert(0, new HistoryEntry
+            {
+                Book = r.Book,
+                StudentId = r.Student?.Id ?? "",
+                Borrowed = r.Date,
+                Returned = DateTime.Today,
+                Remark = r.Type == "Return" ? "Return declined" : "Declined"
+            });
         SyncState();
     }
 
@@ -162,6 +179,28 @@ public static class AppData
         SaveRequestsToDb();
         Database.SaveLoans(Loans);
         Database.SaveHistory(History);
+    }
+
+    /// <summary>Deletes a book and everything that refers to it (requests, loans, history, cart), so nothing re-creates it in the database.</summary>
+    public static void RemoveStudent(Student s)
+    {
+        Requests.RemoveAll(r => r.Student == s || r.Student?.Id == s.Id);
+        Loans.RemoveAll(l => l.StudentId == s.Id);
+        History.RemoveAll(h => h.StudentId == s.Id);
+        Students.Remove(s);
+        Database.DeleteStudent(s.Id);
+        SyncState();
+    }
+
+    public static void RemoveBook(Book b)
+    {
+        Requests.RemoveAll(r => r.Book == b || (!string.IsNullOrEmpty(b.Isbn) && r.Book?.Isbn == b.Isbn));
+        Loans.RemoveAll(l => l.Book == b || (!string.IsNullOrEmpty(b.Isbn) && l.Book?.Isbn == b.Isbn));
+        History.RemoveAll(h => h.Book == b || (!string.IsNullOrEmpty(b.Isbn) && h.Book?.Isbn == b.Isbn));
+        Cart.Remove(b);
+        Books.Remove(b);
+        SyncState();
+        RaiseCartChanged();
     }
 
     public static void SaveRequestsToDb()
@@ -208,6 +247,25 @@ public static class AppData
         SyncState();
     }
 
+    /// <summary>Student asks to return a book: creates a pending Return request for the admin to approve.</summary>
+    public static void RequestReturn(Loan l)
+    {
+        if (l.Status == "RETURNING") return;
+        var student = Students.FirstOrDefault(s => s.Id == l.StudentId) ?? Me;
+        l.Status = "RETURNING";
+        Requests.Add(new BookRequest
+        {
+            Id = $"RR-{DateTime.Today.Year}-{Requests.Count + 1:D4}",
+            Type = "Return",
+            Book = l.Book,
+            Student = student,
+            Date = DateTime.Now,
+            Status = "Pending",
+            Loan = l
+        });
+        SyncState();
+    }
+
     public static void SubmitCart(IEnumerable<Book> books)
     {
         int nextNum = Requests.Count + 1;
@@ -242,18 +300,7 @@ public static class AppData
         foreach (var rec in dbRequests)
         {
             var st = Students.FirstOrDefault(s => s.Id == rec.StudentId);
-            if (st == null)
-            {
-                st = new Student
-                {
-                    Id = rec.StudentId,
-                    Name = rec.StudentName,
-                    Email = $"{rec.StudentId.ToLowerInvariant().Replace("-", "")}@library.edu",
-                    Year = "2nd Year",
-                    Course = "BS Computer Science"
-                };
-                Students.Add(st);
-            }
+            if (st == null) continue;   // student no longer exists: ignore the orphan request (don't invent a student)
 
             var bk = Books.FirstOrDefault(b => b.Title.Equals(rec.BookTitle, StringComparison.OrdinalIgnoreCase) ||
                                                (!string.IsNullOrEmpty(rec.BookIsbn) && b.Isbn == rec.BookIsbn));
@@ -313,28 +360,8 @@ public static class AppData
                 Loans.Add(l);
         History.AddRange(Database.LoadHistory(byIsbn));
 
-        // If no students exist, create a sample one
-        if (Students.Count == 0)
-        {
-            Me = new Student
-            {
-                Id = "20251362-C",
-                Name = "Sample Student",
-                Email = "student@library.edu",
-                Password = "password123",
-                Program = "BS Computer Science",
-                Year = "1",
-                Section = "A",
-                Contact = "09123456789",
-                Joined = DateTime.Today
-            };
-            Students.Add(Me);
-            Database.SaveStudent(Me);
-        }
-        else
-        {
-            Me = Students[0];
-        }
+        // No sample student is created: the student list may be empty. Me is set at login.
+        Me = Students.FirstOrDefault();
     }
 }
 

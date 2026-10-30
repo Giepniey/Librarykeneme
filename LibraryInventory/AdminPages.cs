@@ -96,8 +96,7 @@ public class ManageBooksPage : PageBase
             if (col == "edit") EditBook(b);
             else if (col == "del" && MessageBox.Show($"Delete \"{b.Title}\"?", "Delete book", MessageBoxButtons.YesNo) == DialogResult.Yes)
             {
-                AppData.Books.Remove(b);
-                AppData.SyncState();
+                AppData.RemoveBook(b);
                 Reload();
             }
         };
@@ -213,11 +212,9 @@ public class ManageStudentsPage : PageBase
                     break;
                 case "edit": Edit(st); break;
                 case "del":
-                    if (st == AppData.Me) { MessageBox.Show("The signed-in sample student cannot be deleted.", "Delete student"); break; }
                     if (MessageBox.Show($"Delete {st.Name}?", "Delete student", MessageBoxButtons.YesNo) == DialogResult.Yes)
                     {
-                        AppData.Students.Remove(st);
-                        Database.SaveStudents(AppData.Students);
+                        AppData.RemoveStudent(st);
                         Reload();
                     }
                     break;
